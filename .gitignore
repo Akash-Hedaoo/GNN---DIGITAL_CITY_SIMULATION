@@ -1,0 +1,94 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtualenv
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.venv/
+
+# Environments / dotenv
+.env
+.env.*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.code-workspace
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Node
+node_modules/
+
+# Coverage
+coverage/
+
+# Temporary and backup files
+*.tmp
+*.temp
+*~
+*.swp
+
+# Misc
+*.pyc
+*.pyo
+*.pyd
+
+# Windows image file caches
+ehthumbs.db
+
+
+#adding the graphml files 
+.graphml
+
+# End of .gitignore
