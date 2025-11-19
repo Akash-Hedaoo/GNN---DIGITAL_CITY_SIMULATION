@@ -28,16 +28,23 @@ ax.set_aspect('equal')
 fig.canvas.toolbar.pan()
 
 # 3. Draw Edges (Roads & Metro)
-# Separate metro edges
-metro_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('highway') == 'railway']
+# Separate metro edges by line
+metro_line1_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('line_number') == 1]
+metro_line2_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('line_number') == 2]
 road_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('highway') != 'railway']
 
 # Draw Roads
 nx.draw_networkx_edges(G, pos, edgelist=road_edges, edge_color='#333333', width=0.6, arrows=False, alpha=0.5)
 
-# Draw Metro (Glow Effect)
-nx.draw_networkx_edges(G, pos, edgelist=metro_edges, edge_color='white', width=5.0, alpha=0.4, arrows=False) # Glow
-nx.draw_networkx_edges(G, pos, edgelist=metro_edges, edge_color='#00ffff', width=3.0, alpha=1.0, arrows=False)    # Core
+# Draw Metro Line 1 (Cyan - Horizontal)
+if metro_line1_edges:
+    nx.draw_networkx_edges(G, pos, edgelist=metro_line1_edges, edge_color='white', width=5.0, alpha=0.4, arrows=False)
+    nx.draw_networkx_edges(G, pos, edgelist=metro_line1_edges, edge_color='#00ffff', width=3.0, alpha=1.0, arrows=False)
+
+# Draw Metro Line 2 (Magenta - Vertical)
+if metro_line2_edges:
+    nx.draw_networkx_edges(G, pos, edgelist=metro_line2_edges, edge_color='white', width=5.0, alpha=0.4, arrows=False)
+    nx.draw_networkx_edges(G, pos, edgelist=metro_line2_edges, edge_color='#ff00ff', width=3.0, alpha=1.0, arrows=False)
 
 # 4. Draw Nodes (Zones & Amenities)
 # Base Nodes (Dim)
@@ -83,7 +90,8 @@ plt.title("URBAN SYMBIOSIS - Digital City Twin", color='white', fontsize=22, fon
 
 # Create compact legend
 legend_items = [
-    ("Metro Line", '#00ffff', 'line'),
+    ("Metro Line 1 (Horizontal)", '#00ffff', 'line'),
+    ("Metro Line 2 (Vertical)", '#ff00ff', 'line'),
     ("Metro Stations", '#00ffff', 'circle'),
     ("Hospitals", '#ff1744', 'circle'),
     ("Green Zones", '#00e676', 'circle'),

@@ -289,64 +289,59 @@ def designate_public_places(G: nx.MultiDiGraph):
 
 
 def build_metro_network(G: nx.MultiDiGraph):
-    """Create a simple straight metro line across the city."""
-    if G.number_of_nodes() < 6:
+    """Create two simple metro lines across the city."""
+    if G.number_of_nodes() < 12:
         print("⚠️  Not enough nodes to build metro network.")
         return
     
-    # Strategy: Create one straight line by selecting nodes with similar Y-coordinate (horizontal line)
-    # This minimizes zigzag by keeping the line as straight as possible
-    
     all_nodes = list(G.nodes(data=True))
     
+    # === METRO LINE 1: Horizontal (West to East) ===
     # Calculate center Y coordinate
     avg_y = sum(data['y'] for _, data in all_nodes) / len(all_nodes)
     
-    # Filter nodes that are close to the center horizontal line (within 20% of range)
+    # Filter nodes close to the center horizontal line
     y_values = [data['y'] for _, data in all_nodes]
     y_range = max(y_values) - min(y_values)
-    tolerance = y_range * 0.15  # 15% tolerance for straightness
+    tolerance = y_range * 0.15
     
     horizontal_nodes = [
         (node, data) for node, data in all_nodes
         if abs(data['y'] - avg_y) <= tolerance
     ]
     
-    # Sort by X-coordinate to create a left-to-right line
+    # Sort by X-coordinate
     horizontal_nodes.sort(key=lambda item: item[1]['x'])
     
-    # Select 6 stations evenly distributed along this horizontal line
-    num_stations = min(6, len(horizontal_nodes))
-    metro_stations = []
+    # Select 6 stations for Line 1
+    num_stations_l1 = min(6, len(horizontal_nodes))
+    metro_line1_stations = []
     
-    for i in range(num_stations):
-        idx = int((i / (num_stations - 1)) * (len(horizontal_nodes) - 1)) if num_stations > 1 else 0
+    for i in range(num_stations_l1):
+        idx = int((i / (num_stations_l1 - 1)) * (len(horizontal_nodes) - 1)) if num_stations_l1 > 1 else 0
         node_id, node_data = horizontal_nodes[idx]
-        metro_stations.append(node_id)
+        metro_line1_stations.append(node_id)
         
-        # Tag the node as a metro station
         G.nodes[node_id]["amenity"] = "metro_station"
-        G.nodes[node_id]["station_name"] = f"Metro Station {i + 1}"
+        G.nodes[node_id]["station_name"] = f"Metro L1-S{i + 1}"
         G.nodes[node_id]["line"] = "Metro Line 1"
     
-    # Create edges connecting stations sequentially
-    for i in range(len(metro_stations) - 1):
-        source = metro_stations[i]
-        target = metro_stations[i + 1]
+    # Connect Line 1 stations
+    for i in range(len(metro_line1_stations) - 1):
+        source = metro_line1_stations[i]
+        target = metro_line1_stations[i + 1]
         
-        # Calculate distance between stations
         x1, y1 = G.nodes[source]['x'], G.nodes[source]['y']
         x2, y2 = G.nodes[target]['x'], G.nodes[target]['y']
         dist_deg = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         length_meters = dist_deg * 111000
         
-        # Add bidirectional metro edges with unique attributes
         for src, tgt in [(source, target), (target, source)]:
-            speed_mps = 120 / 3.6  # Convert km/h to m/s
+            speed_mps = 120 / 3.6
             travel_time = length_meters / speed_mps
             
-            G.add_edge(src, tgt, key="metro", **{
-                'osmid': f"metro-{src}-{tgt}",
+            G.add_edge(src, tgt, key="metro_line1", **{
+                'osmid': f"metro-L1-{src}-{tgt}",
                 'highway': 'railway',
                 'maxspeed': 120,
                 'name': 'Metro Line 1',
@@ -360,7 +355,67 @@ def build_metro_network(G: nx.MultiDiGraph):
                 'line_number': 1
             })
     
-    print(f"🚇  Metro network built: {num_stations} stations on a straight horizontal line.")
+    # === METRO LINE 2: Vertical (South to North) ===
+    # Calculate center X coordinate
+    avg_x = sum(data['x'] for _, data in all_nodes) / len(all_nodes)
+    
+    # Filter nodes close to the center vertical line
+    x_values = [data['x'] for _, data in all_nodes]
+    x_range = max(x_values) - min(x_values)
+    tolerance_x = x_range * 0.15
+    
+    vertical_nodes = [
+        (node, data) for node, data in all_nodes
+        if abs(data['x'] - avg_x) <= tolerance_x and node not in metro_line1_stations
+    ]
+    
+    # Sort by Y-coordinate
+    vertical_nodes.sort(key=lambda item: item[1]['y'])
+    
+    # Select 6 stations for Line 2
+    num_stations_l2 = min(6, len(vertical_nodes))
+    metro_line2_stations = []
+    
+    for i in range(num_stations_l2):
+        idx = int((i / (num_stations_l2 - 1)) * (len(vertical_nodes) - 1)) if num_stations_l2 > 1 else 0
+        node_id, node_data = vertical_nodes[idx]
+        metro_line2_stations.append(node_id)
+        
+        G.nodes[node_id]["amenity"] = "metro_station"
+        G.nodes[node_id]["station_name"] = f"Metro L2-S{i + 1}"
+        G.nodes[node_id]["line"] = "Metro Line 2"
+    
+    # Connect Line 2 stations
+    for i in range(len(metro_line2_stations) - 1):
+        source = metro_line2_stations[i]
+        target = metro_line2_stations[i + 1]
+        
+        x1, y1 = G.nodes[source]['x'], G.nodes[source]['y']
+        x2, y2 = G.nodes[target]['x'], G.nodes[target]['y']
+        dist_deg = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        length_meters = dist_deg * 111000
+        
+        for src, tgt in [(source, target), (target, source)]:
+            speed_mps = 120 / 3.6
+            travel_time = length_meters / speed_mps
+            
+            G.add_edge(src, tgt, key="metro_line2", **{
+                'osmid': f"metro-L2-{src}-{tgt}",
+                'highway': 'railway',
+                'maxspeed': 120,
+                'name': 'Metro Line 2',
+                'length': length_meters,
+                'is_closed': 0,
+                'oneway': False,
+                'lanes': 2,
+                'base_travel_time': travel_time,
+                'current_travel_time': travel_time,
+                'transport_mode': 'metro',
+                'line_number': 2
+            })
+    
+    total_stations = len(metro_line1_stations) + len(metro_line2_stations)
+    print(f"🚇  Metro network built: Line 1 (Horizontal-{num_stations_l1} stations) & Line 2 (Vertical-{num_stations_l2} stations) = {total_stations} total stations.")
 
 
 def generate_organic_city():
