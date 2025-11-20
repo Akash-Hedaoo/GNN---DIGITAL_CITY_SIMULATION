@@ -8,9 +8,14 @@ import math
 NUM_NODES = 800  # High density for complexity
 CITY_CENTER_LAT = 18.5204
 CITY_CENTER_LON = 73.8567
-SCALE = 0.02  # Wider area coverage
+SCALE = 0.035  # Wider area coverage for better spread
 NUM_HOSPITALS = 15  # How many civic amenities to inject
 NUM_GREEN_ZONES = 30  # Distributed urban green spaces
+NUM_METRO_LINES = 3  # Number of metro lines
+METRO_STATIONS_PER_LINE = 8  # Stations per line
+METRO_SPEED_KMH = 80  # Metro average speed (faster than cars!)
+METRO_CAPACITY_MULTIPLIER = 5.0  # Metro can handle 5x more passengers than road
+
 GREEN_ZONE_ZONE_SHARE = {
     "downtown": 0.25,
     "residential": 0.4,
@@ -289,153 +294,256 @@ def designate_public_places(G: nx.MultiDiGraph):
 
 
 def build_metro_network(G: nx.MultiDiGraph):
-    """Create two simple metro lines across the city."""
+    """
+    Create an advanced metro network with multiple lines.
+    Metro acts as alternative transport reducing road congestion.
+    
+    Features:
+    - Multiple lines with unique routes
+    - Faster travel times than roads
+    - Higher capacity (less congestion)
+    - Strategic station placement
+    """
     if G.number_of_nodes() < 12:
         print("⚠️  Not enough nodes to build metro network.")
         return
     
     all_nodes = list(G.nodes(data=True))
+    all_metro_stations = []
+    metro_edges_added = 0
     
-    # === METRO LINE 1: Horizontal (West to East) ===
-    # Calculate center Y coordinate
+    # Calculate city bounds
+    avg_x = sum(data['x'] for _, data in all_nodes) / len(all_nodes)
     avg_y = sum(data['y'] for _, data in all_nodes) / len(all_nodes)
     
-    # Filter nodes close to the center horizontal line
-    y_values = [data['y'] for _, data in all_nodes]
-    y_range = max(y_values) - min(y_values)
-    tolerance = y_range * 0.15
-    
-    horizontal_nodes = [
-        (node, data) for node, data in all_nodes
-        if abs(data['y'] - avg_y) <= tolerance
-    ]
-    
-    # Sort by X-coordinate
-    horizontal_nodes.sort(key=lambda item: item[1]['x'])
-    
-    # Select 6 stations for Line 1
-    num_stations_l1 = min(6, len(horizontal_nodes))
-    metro_line1_stations = []
-    
-    for i in range(num_stations_l1):
-        idx = int((i / (num_stations_l1 - 1)) * (len(horizontal_nodes) - 1)) if num_stations_l1 > 1 else 0
-        node_id, node_data = horizontal_nodes[idx]
-        metro_line1_stations.append(node_id)
-        
-        G.nodes[node_id]["amenity"] = "metro_station"
-        G.nodes[node_id]["station_name"] = f"Metro L1-S{i + 1}"
-        G.nodes[node_id]["line"] = "Metro Line 1"
-    
-    # Connect Line 1 stations
-    for i in range(len(metro_line1_stations) - 1):
-        source = metro_line1_stations[i]
-        target = metro_line1_stations[i + 1]
-        
-        x1, y1 = G.nodes[source]['x'], G.nodes[source]['y']
-        x2, y2 = G.nodes[target]['x'], G.nodes[target]['y']
-        dist_deg = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-        length_meters = dist_deg * 111000
-        
-        for src, tgt in [(source, target), (target, source)]:
-            speed_mps = 120 / 3.6
-            travel_time = length_meters / speed_mps
-            
-            G.add_edge(src, tgt, key="metro_line1", **{
-                'osmid': f"metro-L1-{src}-{tgt}",
-                'highway': 'railway',
-                'maxspeed': 120,
-                'name': 'Metro Line 1',
-                'length': length_meters,
-                'is_closed': 0,
-                'oneway': False,
-                'lanes': 2,
-                'base_travel_time': travel_time,
-                'current_travel_time': travel_time,
-                'transport_mode': 'metro',
-                'line_number': 1
-            })
-    
-    # === METRO LINE 2: Vertical (South to North) ===
-    # Calculate center X coordinate
-    avg_x = sum(data['x'] for _, data in all_nodes) / len(all_nodes)
-    
-    # Filter nodes close to the center vertical line
     x_values = [data['x'] for _, data in all_nodes]
+    y_values = [data['y'] for _, data in all_nodes]
     x_range = max(x_values) - min(x_values)
-    tolerance_x = x_range * 0.15
+    y_range = max(y_values) - min(y_values)
     
-    vertical_nodes = [
-        (node, data) for node, data in all_nodes
-        if abs(data['x'] - avg_x) <= tolerance_x and node not in metro_line1_stations
+    # Metro line configurations
+    metro_configs = [
+        {
+            'name': 'Red Line',
+            'direction': 'horizontal',
+            'offset': 0,  # Center
+            'color': '#FF0000',
+            'description': 'East-West Corridor'
+        },
+        {
+            'name': 'Blue Line',
+            'direction': 'vertical',
+            'offset': 0,  # Center
+            'color': '#0000FF',
+            'description': 'North-South Corridor'
+        },
+        {
+            'name': 'Green Line',
+            'direction': 'diagonal',
+            'angle': 45,  # Diagonal NE-SW
+            'color': '#00FF00',
+            'description': 'Diagonal Connector'
+        }
     ]
     
-    # Sort by Y-coordinate
-    vertical_nodes.sort(key=lambda item: item[1]['y'])
-    
-    # Select 6 stations for Line 2
-    num_stations_l2 = min(6, len(vertical_nodes))
-    metro_line2_stations = []
-    
-    for i in range(num_stations_l2):
-        idx = int((i / (num_stations_l2 - 1)) * (len(vertical_nodes) - 1)) if num_stations_l2 > 1 else 0
-        node_id, node_data = vertical_nodes[idx]
-        metro_line2_stations.append(node_id)
+    for line_idx, config in enumerate(metro_configs[:NUM_METRO_LINES], 1):
+        line_name = config['name']
+        direction = config['direction']
         
-        G.nodes[node_id]["amenity"] = "metro_station"
-        G.nodes[node_id]["station_name"] = f"Metro L2-S{i + 1}"
-        G.nodes[node_id]["line"] = "Metro Line 2"
-    
-    # Connect Line 2 stations
-    for i in range(len(metro_line2_stations) - 1):
-        source = metro_line2_stations[i]
-        target = metro_line2_stations[i + 1]
+        # Select nodes for this metro line
+        if direction == 'horizontal':
+            # Horizontal line (West to East)
+            target_y = avg_y + config['offset'] * y_range
+            tolerance = y_range * 0.2
+            
+            candidate_nodes = [
+                (node, data) for node, data in all_nodes
+                if abs(data['y'] - target_y) <= tolerance 
+                and node not in all_metro_stations
+            ]
+            candidate_nodes.sort(key=lambda item: item[1]['x'])
+            
+        elif direction == 'vertical':
+            # Vertical line (South to North)
+            target_x = avg_x + config['offset'] * x_range
+            tolerance = x_range * 0.2
+            
+            candidate_nodes = [
+                (node, data) for node, data in all_nodes
+                if abs(data['x'] - target_x) <= tolerance
+                and node not in all_metro_stations
+            ]
+            candidate_nodes.sort(key=lambda item: item[1]['y'])
+            
+        elif direction == 'diagonal':
+            # Diagonal line (along a specific angle)
+            angle_rad = math.radians(config['angle'])
+            
+            # Calculate perpendicular distance from diagonal line
+            candidate_nodes = []
+            for node, data in all_nodes:
+                if node in all_metro_stations:
+                    continue
+                
+                # Point relative to center
+                px = data['x'] - avg_x
+                py = data['y'] - avg_y
+                
+                # Distance from diagonal line through origin
+                dist_from_line = abs(-math.sin(angle_rad) * px + math.cos(angle_rad) * py)
+                
+                # Position along the line (for sorting)
+                along_line = math.cos(angle_rad) * px + math.sin(angle_rad) * py
+                
+                if dist_from_line <= max(x_range, y_range) * 0.15:
+                    candidate_nodes.append((node, data, along_line))
+            
+            candidate_nodes.sort(key=lambda item: item[2])
+            candidate_nodes = [(n, d) for n, d, _ in candidate_nodes]
         
-        x1, y1 = G.nodes[source]['x'], G.nodes[source]['y']
-        x2, y2 = G.nodes[target]['x'], G.nodes[target]['y']
-        dist_deg = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-        length_meters = dist_deg * 111000
+        else:
+            continue
         
-        for src, tgt in [(source, target), (target, source)]:
-            speed_mps = 120 / 3.6
+        # Select evenly spaced stations
+        num_stations = min(METRO_STATIONS_PER_LINE, len(candidate_nodes))
+        if num_stations < 2:
+            print(f"⚠️  Not enough nodes for {line_name}")
+            continue
+        
+        line_stations = []
+        for i in range(num_stations):
+            if num_stations == 1:
+                idx = 0
+            else:
+                idx = int((i / (num_stations - 1)) * (len(candidate_nodes) - 1))
+            
+            node_id, node_data = candidate_nodes[idx]
+            line_stations.append(node_id)
+            all_metro_stations.append(node_id)
+            
+            # Mark node as metro station
+            existing_amenity = G.nodes[node_id].get("amenity", "")
+            if existing_amenity and "metro" not in existing_amenity:
+                G.nodes[node_id]["amenity"] = f"{existing_amenity}+metro_station"
+            else:
+                G.nodes[node_id]["amenity"] = "metro_station"
+            
+            G.nodes[node_id]["metro_station"] = True
+            G.nodes[node_id]["station_name"] = f"{line_name} S{i + 1}"
+            # Store metro lines as comma-separated string instead of list
+            existing_lines = G.nodes[node_id].get("metro_lines_str", "")
+            if existing_lines:
+                G.nodes[node_id]["metro_lines_str"] = existing_lines + "," + line_name
+            else:
+                G.nodes[node_id]["metro_lines_str"] = line_name
+            G.nodes[node_id]["station_color"] = config['color']
+        
+        # Connect stations with metro edges
+        for i in range(len(line_stations) - 1):
+            source = line_stations[i]
+            target = line_stations[i + 1]
+            
+            x1, y1 = G.nodes[source]['x'], G.nodes[source]['y']
+            x2, y2 = G.nodes[target]['x'], G.nodes[target]['y']
+            dist_deg = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            length_meters = dist_deg * 111000  # Convert to meters
+            
+            # Metro is MUCH faster than cars
+            speed_mps = METRO_SPEED_KMH / 3.6
             travel_time = length_meters / speed_mps
             
-            G.add_edge(src, tgt, key="metro_line2", **{
-                'osmid': f"metro-L2-{src}-{tgt}",
-                'highway': 'railway',
-                'maxspeed': 120,
-                'name': 'Metro Line 2',
-                'length': length_meters,
-                'is_closed': 0,
-                'oneway': False,
-                'lanes': 2,
-                'base_travel_time': travel_time,
-                'current_travel_time': travel_time,
-                'transport_mode': 'metro',
-                'line_number': 2
-            })
+            # Add bidirectional metro edges with unique keys
+            for src, tgt in [(source, target), (target, source)]:
+                edge_key = f"metro_{line_name.lower().replace(' ', '_')}_{src}_{tgt}"
+                
+                G.add_edge(src, tgt, key=edge_key, **{
+                    'osmid': edge_key,
+                    'highway': 'metro_railway',
+                    'maxspeed': METRO_SPEED_KMH,
+                    'speed_limit': METRO_SPEED_KMH,
+                    'name': line_name,
+                    'length': length_meters,
+                    'is_closed': 0,
+                    'oneway': False,
+                    'lanes': 2,
+                    'base_travel_time': travel_time,
+                    'current_travel_time': travel_time,
+                    'transport_mode': 'metro',
+                    'line_name': line_name,
+                    'line_number': line_idx,
+                    'line_color': config['color'],
+                    'capacity_multiplier': METRO_CAPACITY_MULTIPLIER,
+                    'is_metro': True,
+                    'congestion_resistant': True  # Metro doesn't get stuck in traffic!
+                })
+                metro_edges_added += 1
+        
+        print(f"🚇  {line_name} ({config['description']}): {num_stations} stations, {len(line_stations)-1} segments")
     
-    total_stations = len(metro_line1_stations) + len(metro_line2_stations)
-    print(f"🚇  Metro network built: Line 1 (Horizontal-{num_stations_l1} stations) & Line 2 (Vertical-{num_stations_l2} stations) = {total_stations} total stations.")
+    # Add interchange stations (stations served by multiple lines)
+    interchange_count = 0
+    for node in all_metro_stations:
+        lines_str = G.nodes[node].get("metro_lines_str", "")
+        lines = lines_str.split(",") if lines_str else []
+        if len(lines) > 1:
+            G.nodes[node]["interchange"] = True
+            G.nodes[node]["station_name"] += " (Interchange)"
+            interchange_count += 1
+    
+    total_stations = len(all_metro_stations)
+    unique_stations = len(set(all_metro_stations))
+    
+    print(f"\n🎯 Metro Network Summary:")
+    print(f"   Total Stations: {unique_stations}")
+    print(f"   Interchange Stations: {interchange_count}")
+    print(f"   Metro Edges: {metro_edges_added}")
+    print(f"   Average Speed: {METRO_SPEED_KMH} km/h (vs ~40 km/h road)")
+    print(f"   Capacity: {METRO_CAPACITY_MULTIPLIER}x road capacity")
+    print(f"   🎉 Metro can ease traffic by providing fast alternative routes!")
 
 
 def generate_organic_city():
     print(f"🏗️  Generating Organic City with {NUM_NODES} nodes...")
 
     # 1. Generate Random Points (Organic Intersections)
-    # We use a normal distribution to cluster more nodes in the center (Downtown)
-    # and fewer in the outskirts (Suburbs).
+    # Use Poisson disk sampling approach for better distribution
+    # This prevents clustering and ensures minimum spacing between nodes
     points = []
-    for _ in range(NUM_NODES):
-        # Mix of uniform (spread out) and normal (clustered)
-        if random.random() > 0.3:
-            x = np.random.normal(0, 0.6) # Cluster near center
-            y = np.random.normal(0, 0.6)
+    min_distance = 0.12  # Minimum distance between nodes
+    max_attempts = 30  # Attempts to place each point
+    
+    # Start with a few seed points
+    for _ in range(5):
+        x = np.random.uniform(-1.8, 1.8)
+        y = np.random.uniform(-1.8, 1.8)
+        points.append([x, y])
+    
+    # Generate remaining points with spacing constraint
+    attempts = 0
+    max_total_attempts = NUM_NODES * 50
+    
+    while len(points) < NUM_NODES and attempts < max_total_attempts:
+        attempts += 1
+        
+        # Mix of uniform (spread out) and normal (slight center bias)
+        if random.random() > 0.4:
+            x = np.random.normal(0, 0.8)  # Slight center clustering
+            y = np.random.normal(0, 0.8)
         else:
-            x = np.random.uniform(-1.5, 1.5) # Spread out
-            y = np.random.uniform(-1.5, 1.5)
+            x = np.random.uniform(-1.8, 1.8)  # More spread out
+            y = np.random.uniform(-1.8, 1.8)
+        
+        # Check minimum distance to existing points
+        new_point = np.array([x, y])
+        if len(points) > 0:
+            distances = np.linalg.norm(np.array(points) - new_point, axis=1)
+            if np.min(distances) < min_distance:
+                continue  # Too close, try again
+        
         points.append([x, y])
     
     points = np.array(points)
+    print(f"   ✅ Generated {len(points)} well-spaced nodes")
 
     # 2. Create Structure using Delaunay Triangulation
     # This creates a "Spider web" of non-overlapping connections
@@ -457,11 +565,12 @@ def generate_organic_city():
         p2 = points[v]
         dist = np.linalg.norm(p1 - p2)
         
-        # Remove very long edges (outliers) or random 20% of internal edges
-        if dist > 0.5 or (dist < 0.1 and random.random() > 0.7):
+        # Remove very long edges (adjusted for wider spread)
+        if dist > 0.6 or (dist < 0.08 and random.random() > 0.7):
             edges_to_remove.append((u, v))
             
     G_temp.remove_edges_from(edges_to_remove)
+    print(f"   🔧 Pruned {len(edges_to_remove)} edges for realistic street network")
     
     # Remove isolated nodes
     G_temp.remove_nodes_from(list(nx.isolates(G_temp)))

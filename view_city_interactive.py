@@ -8,6 +8,9 @@ print("🗺️  Creating Interactive Web Map (Google Maps style)...")
 
 try:
     G = nx.read_graphml("city_graph.graphml")
+    # Convert to MultiDiGraph if needed for proper edge handling
+    if not isinstance(G, nx.MultiDiGraph):
+        G = nx.MultiDiGraph(G)
 except Exception as e:
     print(f"❌ Error loading graph: {e}")
     exit()
@@ -32,8 +35,10 @@ COLORS = {
     'residential': '#33ff33',
     'downtown': '#3333ff',
     'suburbs': '#888888',
+    'metro_red': '#ff0000',
+    'metro_blue': '#0000ff',
+    'metro_green': '#00ff00',
     'metro': '#00ffff',
-    'metro_line2': '#ff00ff',
     'hospital': '#ff1744',
     'green_zone': '#00e676',
     'school': '#2196f3',
@@ -75,11 +80,23 @@ for u, v, data in G.edges(data=True):
             ).add_to(roads_layer)
 
 # Draw Metro Lines
-metro_coords_line1 = []
-metro_coords_line2 = []
+# Check if MultiDiGraph or DiGraph
+is_multigraph = isinstance(G, nx.MultiDiGraph) or isinstance(G, nx.MultiGraph)
 
-for u, v, data in G.edges(data=True):
-    if data.get('highway') == 'railway':
+if is_multigraph:
+    edge_iter = G.edges(keys=True, data=True)
+else:
+    edge_iter = [(u, v, 0, data) for u, v, data in G.edges(data=True)]
+
+for edge_tuple in edge_iter:
+    if len(edge_tuple) == 4:
+        u, v, key, data = edge_tuple
+    else:
+        u, v, data = edge_tuple
+        key = 0
+    
+    # Check for metro edges using is_metro attribute or highway type
+    if data.get('is_metro') or data.get('highway') in ['railway', 'metro_railway']:
         u_data = G.nodes[u]
         v_data = G.nodes[v]
         
@@ -89,16 +106,21 @@ for u, v, data in G.edges(data=True):
                 [float(v_data['y']), float(v_data['x'])]
             ]
             
-            line_num = data.get('line_number', 1)
-            color = COLORS['metro'] if line_num == 1 else COLORS['metro_line2']
-            line_name = data.get('name', f'Metro Line {line_num}')
+            # Get line name and color from edge data
+            line_name = data.get('line_name', data.get('name', 'Metro Line'))
+            line_color = data.get('line_color', '#00ffff')
+            line_num = data.get('line_number', 0)
+            
+            # Map line colors
+            color_map = {0: COLORS['metro_red'], 1: COLORS['metro_blue'], 2: COLORS['metro_green']}
+            color = color_map.get(line_num, line_color)
             
             folium.PolyLine(
                 coords,
                 color=color,
-                weight=4,
+                weight=5,
                 opacity=0.9,
-                popup=f"🚇 {line_name}<br>Speed: {data.get('maxspeed', 120)} km/h"
+                popup=f"🚇 {line_name}<br>Speed: {data.get('maxspeed', 80)} km/h<br>Capacity: {data.get('capacity_multiplier', 5.0)}x road"
             ).add_to(metro_layer)
 
 # Draw Zone Nodes (base layer)
@@ -203,8 +225,9 @@ legend_html = '''
             font-family: Arial, sans-serif;
             font-size: 12px;">
     <h4 style="margin-top: 0; color: #00ffff; text-align: center;">URBAN SYMBIOSIS</h4>
-    <p style="margin: 5px 0;"><span style="color: #00ffff;">━━</span> Metro Line 1 (Horizontal)</p>
-    <p style="margin: 5px 0;"><span style="color: #ff00ff;">━━</span> Metro Line 2 (Vertical)</p>
+    <p style="margin: 5px 0;"><span style="color: #ff0000;">━━</span> Red Line (East-West)</p>
+    <p style="margin: 5px 0;"><span style="color: #0000ff;">━━</span> Blue Line (North-South)</p>
+    <p style="margin: 5px 0;"><span style="color: #00ff00;">━━</span> Green Line (Diagonal)</p>
     <p style="margin: 5px 0;"><span style="color: #00ffff;">●</span> Metro Stations</p>
     <p style="margin: 5px 0;"><span style="color: #ff1744;">●</span> Hospitals</p>
     <p style="margin: 5px 0;"><span style="color: #00e676;">●</span> Green Zones/Parks</p>
