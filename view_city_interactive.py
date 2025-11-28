@@ -12,7 +12,7 @@ try:
     if not isinstance(G, nx.MultiDiGraph):
         G = nx.MultiDiGraph(G)
 except Exception as e:
-    print(f"❌ Error loading graph: {e}")
+    print(f"[FAIL] Error loading graph: {e}")
     exit()
 
 # Calculate map center
@@ -55,6 +55,21 @@ roads_layer = folium.FeatureGroup(name='Roads', show=True)
 metro_layer = folium.FeatureGroup(name='Metro Lines', show=True)
 zones_layer = folium.FeatureGroup(name='Zone Nodes', show=False)
 amenities_layer = folium.FeatureGroup(name='Amenities', show=True)
+population_layer = folium.FeatureGroup(name='Population Density', show=True)
+
+# Helper function to get population color
+def get_population_color(population):
+    """Return color based on population density"""
+    if population > 700:
+        return '#d62728'  # Dark red
+    elif population > 500:
+        return '#ff7f0e'  # Orange
+    elif population > 300:
+        return '#ffff00'  # Yellow
+    elif population > 100:
+        return '#2ca02c'  # Green
+    else:
+        return '#1f77b4'  # Blue
 
 # Draw Roads
 for u, v, data in G.edges(data=True):
@@ -142,7 +157,7 @@ for node, data in G.nodes(data=True):
 # Draw Amenities (hospitals, schools, etc.)
 amenity_config = {
     'metro_station': ('🚇', COLORS['metro'], 10, 'Metro Station'),
-    'hospital': ('🏥', COLORS['hospital'], 8, 'Hospital'),
+    'hospital': ('[HOSPITAL]', COLORS['hospital'], 8, 'Hospital'),
     'school': ('🏫', COLORS['school'], 6, 'School'),
     'mall': ('🛒', COLORS['mall'], 7, 'Shopping Mall'),
     'office': ('🏢', COLORS['office'], 5, 'Office'),
@@ -180,7 +195,7 @@ for node, data in G.nodes(data=True):
 # Draw Green Zones
 for node, data in G.nodes(data=True):
     if data.get('green_zone') and 'x' in data and 'y' in data:
-        popup_html = f"<b>🌳 {data.get('park_name', 'Park')}</b><br>"
+        popup_html = f"<b>[TREE] {data.get('park_name', 'Park')}</b><br>"
         popup_html += f"Type: {data.get('park_type', 'Park')}<br>"
         popup_html += f"Area: {data.get('green_area_hectares', 'N/A')} hectares"
         
@@ -199,6 +214,7 @@ roads_layer.add_to(m)
 metro_layer.add_to(m)
 zones_layer.add_to(m)
 amenities_layer.add_to(m)
+population_layer.add_to(m)
 
 # Add layer control
 folium.LayerControl(position='topright', collapsed=False).add_to(m)
@@ -236,6 +252,13 @@ legend_html = '''
     <p style="margin: 5px 0;"><span style="color: #ff5722;">●</span> Factories</p>
     <p style="margin: 5px 0;"><span style="color: #9c27b0;">●</span> Government</p>
     <hr style="border-color: #555;">
+    <p style="margin: 5px 0; font-size: 10px;"><b>Population Density:</b></p>
+    <p style="margin: 5px 0;"><span style="color: #d62728;">●</span> Very High (>700)</p>
+    <p style="margin: 5px 0;"><span style="color: #ff7f0e;">●</span> High (500-700)</p>
+    <p style="margin: 5px 0;"><span style="color: #ffff00;">●</span> Medium (300-500)</p>
+    <p style="margin: 5px 0;"><span style="color: #2ca02c;">●</span> Low (100-300)</p>
+    <p style="margin: 5px 0;"><span style="color: #1f77b4;">●</span> Sparse (<100)</p>
+    <hr style="border-color: #555;">
     <p style="margin: 5px 0; font-size: 10px;"><b>Zones:</b></p>
     <p style="margin: 5px 0;"><span style="color: #ff3333;">●</span> Industrial</p>
     <p style="margin: 5px 0;"><span style="color: #3333ff;">●</span> Downtown</p>
@@ -245,11 +268,47 @@ legend_html = '''
 '''
 m.get_root().html.add_child(folium.Element(legend_html))
 
+# Add population density visualization
+print("[CHART] Adding population density layer...")
+for node, data in G.nodes(data=True):
+    if 'x' in data and 'y' in data:
+        population = int(data.get('population', 0))
+        daily_trips = int(data.get('daily_trips', 0))
+        zone = data.get('zone', 'unknown')
+        amenity = data.get('amenity', 'none')
+        
+        # Get color based on population
+        color = get_population_color(population)
+        
+        # Circle size based on population (scaled)
+        radius = max(3, min(15, 3 + (population / 100)))
+        
+        # Create popup with detailed information
+        popup_text = f"""
+        <b>Node {node}</b><br>
+        <b>Population:</b> {population:,} people<br>
+        <b>Daily Trips:</b> {daily_trips:,}<br>
+        <b>Zone:</b> {zone}<br>
+        <b>Amenity:</b> {amenity if amenity != 'none' else 'Residential'}<br>
+        <b>Coordinates:</b> ({float(data.get('y', 0)):.4f}, {float(data.get('x', 0)):.4f})
+        """
+        
+        folium.CircleMarker(
+            location=[float(data['y']), float(data['x'])],
+            radius=radius,
+            popup=folium.Popup(popup_text, max_width=300),
+            color=color,
+            fill=True,
+            fillColor=color,
+            fillOpacity=0.7,
+            weight=1
+        ).add_to(population_layer)
+
 # Save map
 output_file = "city_map_interactive.html"
 m.save(output_file)
 
-print(f"✅ Interactive map created: {output_file}")
+print(f"[OK] Interactive map created: {output_file}")
 print(f"🌐 Opening in browser...")
 
 # Open in browser

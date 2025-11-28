@@ -69,12 +69,12 @@ def interactive_simulation():
     print("╚" + "="*68 + "╝")
     
     # Load graph
-    print("\n📂 Loading city graph...")
+    print("\n[FOLDER] Loading city graph...")
     try:
         G = nx.read_graphml('city_graph.graphml')
-        print(f"✅ Loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+        print(f"[OK] Loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     except FileNotFoundError:
-        print("❌ city_graph.graphml not found!")
+        print("[FAIL] city_graph.graphml not found!")
         print("   Run: python generate_complex_city.py")
         return
     
@@ -143,9 +143,9 @@ def interactive_simulation():
                     print(f"\n🎲 Random: {u} → {v}")
                     sim.close_road(u, v, key)
                     closed_roads.append((u, v, key))
-                    print("✅ Road blocked!")
+                    print("[OK] Road blocked!")
                 else:
-                    print("❌ All roads already closed!")
+                    print("[FAIL] All roads already closed!")
             
             elif selection == 'custom':
                 try:
@@ -164,13 +164,13 @@ def interactive_simulation():
                         if (source, target, key) not in sim.closed_edges:
                             sim.close_road(source, target, key)
                             closed_roads.append((source, target, key))
-                            print(f"✅ Road {source} → {target} blocked!")
+                            print(f"[OK] Road {source} → {target} blocked!")
                         else:
-                            print("❌ Road already closed!")
+                            print("[FAIL] Road already closed!")
                     else:
-                        print(f"❌ No road from {source} to {target}")
+                        print(f"[FAIL] No road from {source} to {target}")
                 except Exception as e:
-                    print(f"❌ Error: {e}")
+                    print(f"[FAIL] Error: {e}")
             
             else:
                 try:
@@ -180,18 +180,18 @@ def interactive_simulation():
                         if (u, v, key) not in sim.closed_edges:
                             sim.close_road(u, v, key)
                             closed_roads.append((u, v, key))
-                            print(f"✅ Road {u} → {v} blocked!")
+                            print(f"[OK] Road {u} → {v} blocked!")
                         else:
-                            print("❌ Road already closed!")
+                            print("[FAIL] Road already closed!")
                     else:
-                        print("❌ Invalid road number")
+                        print("[FAIL] Invalid road number")
                 except ValueError:
-                    print("❌ Invalid input")
+                    print("[FAIL] Invalid input")
         
         # UNBLOCK ROAD
         elif choice == '3':
             if not closed_roads:
-                print("\n❌ No roads are currently blocked!")
+                print("\n[FAIL] No roads are currently blocked!")
             else:
                 print("\n🚧 Currently Blocked Roads:")
                 print("-" * 50)
@@ -205,7 +205,7 @@ def interactive_simulation():
                     if selection == 'all':
                         for u, v, key in closed_roads:
                             sim.reopen_road(u, v, key)
-                        print(f"✅ Unblocked {len(closed_roads)} roads!")
+                        print(f"[OK] Unblocked {len(closed_roads)} roads!")
                         closed_roads.clear()
                     else:
                         idx = int(selection) - 1
@@ -213,11 +213,11 @@ def interactive_simulation():
                             u, v, key = closed_roads[idx]
                             sim.reopen_road(u, v, key)
                             closed_roads.pop(idx)
-                            print(f"✅ Road {u} → {v} reopened!")
+                            print(f"[OK] Road {u} → {v} reopened!")
                         else:
-                            print("❌ Invalid selection")
+                            print("[FAIL] Invalid selection")
                 except ValueError:
-                    print("❌ Invalid input")
+                    print("[FAIL] Invalid input")
         
         # SHOW STATISTICS
         elif choice == '4':
@@ -231,24 +231,24 @@ def interactive_simulation():
         # RUN SIMULATION (1 step)
         elif choice == '5':
             try:
-                minutes = input("\n⏱️  Minutes to simulate (default=1): ").strip()
+                minutes = input("\n[TIME]️  Minutes to simulate (default=1): ").strip()
                 minutes = int(minutes) if minutes else 1
                 
                 for i in range(minutes):
                     sim.step(delta_time=1.0)
                 
-                print(f"\n✅ Simulated {minutes} minute(s)")
+                print(f"\n[OK] Simulated {minutes} minute(s)")
                 sim.print_statistics()
             except ValueError:
-                print("❌ Invalid number")
+                print("[FAIL] Invalid number")
         
         # AUTO-RUN
         elif choice == '6':
             try:
-                duration = input("\n⏱️  Duration in minutes (default=30): ").strip()
+                duration = input("\n[TIME]️  Duration in minutes (default=30): ").strip()
                 duration = int(duration) if duration else 30
                 
-                print(f"\n🚀 Running simulation for {duration} minutes...")
+                print(f"\n[ROCKET] Running simulation for {duration} minutes...")
                 
                 for minute in range(duration):
                     sim.step(delta_time=1.0)
@@ -259,11 +259,11 @@ def interactive_simulation():
                         print(f"Network delay: {stats['total_network_delay']:.1f}m")
                         print(f"Congested edges: {stats['congested_edges']}/{stats['total_edges']}")
                 
-                print("\n✅ Simulation complete!")
+                print("\n[OK] Simulation complete!")
                 sim.print_statistics()
                 
             except ValueError:
-                print("❌ Invalid input")
+                print("[FAIL] Invalid input")
         
         # FIND PATH
         elif choice == '7':
@@ -287,21 +287,21 @@ def interactive_simulation():
                     
                     if path:
                         travel_time = sim.get_path_travel_time(path)
-                        print(f"\n✅ Path found!")
+                        print(f"\n[OK] Path found!")
                         print(f"   Nodes: {len(path)}")
                         print(f"   Route: {' → '.join(map(str, path[:5]))}{'...' if len(path) > 5 else ''}")
                         print(f"   Travel time: {travel_time:.1f} minutes")
                     else:
-                        print("\n❌ No path found!")
+                        print("\n[FAIL] No path found!")
                 else:
-                    print("\n❌ Invalid nodes!")
+                    print("\n[FAIL] Invalid nodes!")
                     
             except Exception as e:
-                print(f"❌ Error: {e}")
+                print(f"[FAIL] Error: {e}")
         
         # RESET
         elif choice == '8':
-            confirm = input("\n⚠️  Reset simulation? (yes/no): ").strip().lower()
+            confirm = input("\n[WARNING]️  Reset simulation? (yes/no): ").strip().lower()
             if confirm in ['yes', 'y']:
                 # Reopen all roads
                 for u, v, key in closed_roads:
@@ -310,24 +310,24 @@ def interactive_simulation():
                 
                 # Reinitialize
                 sim = MacroscopicTrafficSimulator(G, config)
-                print("✅ Simulation reset!")
+                print("[OK] Simulation reset!")
         
         # EXIT
         elif choice == '0':
             print("\n👋 Exiting simulator...")
             
             # Ask if user wants to save data
-            save = input("💾 Save training data? (yes/no): ").strip().lower()
+            save = input("[SAVE] Save training data? (yes/no): ").strip().lower()
             if save in ['yes', 'y']:
                 filename = input("   Filename (default: interactive_data.pkl): ").strip()
                 filename = filename if filename else 'interactive_data.pkl'
                 sim.export_training_data(filename)
             
-            print("✅ Goodbye!")
+            print("[OK] Goodbye!")
             break
         
         else:
-            print("❌ Invalid option. Please try again.")
+            print("[FAIL] Invalid option. Please try again.")
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ class TrafficSnapshot:
     edge_congestion: Dict[Tuple[int, int, int], float]  # (u, v, key) -> congestion factor
     closed_edges: Set[Tuple[int, int, int]]
     total_network_delay: float
+    node_populations: Optional[Dict[int, int]] = None  # Population at each node
+    node_daily_trips: Optional[Dict[int, int]] = None  # Daily trips from each node
 
 
 @dataclass
@@ -75,6 +77,7 @@ class MacroscopicTrafficSimulator:
         self.current_travel_times = {}
         self.congestion_factors = {}
         self.closed_edges = set()
+        self.population_demand = {}  # Track demand from population
         
         # History tracking
         self.snapshots: List[TrafficSnapshot] = []
@@ -82,8 +85,9 @@ class MacroscopicTrafficSimulator:
         
         # Initialize base travel times
         self._initialize_base_times()
+        self._calculate_population_demand()
         
-        print(f"🚦 Macroscopic Traffic Simulator initialized")
+        print(f"[TRAFFIC] Macroscopic Traffic Simulator initialized")
         print(f"   Nodes: {self.G.number_of_nodes()}")
         print(f"   Edges: {self.G.number_of_edges()}")
         
@@ -118,8 +122,52 @@ class MacroscopicTrafficSimulator:
                 road_count += 1
         
         if metro_count > 0:
-            print(f"   🚇 Metro edges: {metro_count}")
+            print(f"   [METRO] Metro edges: {metro_count}")
             print(f"   🚗 Road edges: {road_count}")
+    
+    def _calculate_population_demand(self):
+        """
+        Calculate traffic demand based on node populations.
+        Higher population = more traffic demand on edges.
+        
+        This creates realistic baseline congestion from human activity,
+        not just random events.
+        """
+        total_daily_trips = 0
+        
+        for node in self.G.nodes():
+            population = self.G.nodes[node].get('population', 0)
+            daily_trips = self.G.nodes[node].get('daily_trips', 0)
+            
+            if daily_trips > 0:
+                total_daily_trips += daily_trips
+                self.population_demand[node] = daily_trips
+        
+        # Apply population demand to edges by distributing across connected edges
+        for u, v, key, data in self.G.edges(keys=True, data=True):
+            if (u, v, key) not in self.population_demand:
+                # Estimate demand on this edge from endpoint populations
+                u_demand = self.population_demand.get(u, 0)
+                v_demand = self.population_demand.get(v, 0)
+                avg_demand = (u_demand + v_demand) / 2.0
+                
+                # Apply demand as baseline congestion factor
+                # Assuming standard road capacity: 500 vehicles/hour
+                # If demand > capacity, congestion increases
+                is_metro = data.get('is_metro', False)
+                
+                if not is_metro and avg_demand > 0:
+                    # Roads: higher demand = more congestion
+                    demand_multiplier = 1.0 + (avg_demand / 1500.0) * 0.3  # Up to +30% baseline
+                    self.G[u][v][key]['demand_congestion_factor'] = min(demand_multiplier, 1.5)
+                    self.congestion_factors[(u, v, key)] *= demand_multiplier
+                else:
+                    # Metro: demand doesn't increase congestion (high capacity)
+                    self.G[u][v][key]['demand_congestion_factor'] = 1.0
+        
+        if total_daily_trips > 0:
+            print(f"   👥 Population-based Demand: {total_daily_trips:,} trips/day")
+            print(f"   [CHART] Average demand per node: {total_daily_trips // max(1, len(self.G.nodes())):,} trips")
     
     def close_road(self, u: int, v: int, key: int = 0):
         """
@@ -134,7 +182,7 @@ class MacroscopicTrafficSimulator:
         edge_id = (u, v, key)
         
         if edge_id not in self.G.edges(keys=True):
-            print(f"⚠️  Edge {edge_id} not found in graph")
+            print(f"[WARNING]️  Edge {edge_id} not found in graph")
             return
         
         print(f"🚧 Closing road: {u} -> {v} (key={key})")
@@ -207,10 +255,10 @@ class MacroscopicTrafficSimulator:
         edge_id = (u, v, key)
         
         if edge_id not in self.closed_edges:
-            print(f"⚠️  Edge {edge_id} was not closed")
+            print(f"[WARNING]️  Edge {edge_id} was not closed")
             return
         
-        print(f"✅ Reopening road: {u} -> {v} (key={key})")
+        print(f"[OK] Reopening road: {u} -> {v} (key={key})")
         
         # Remove from closed set
         self.closed_edges.remove(edge_id)
@@ -317,12 +365,20 @@ class MacroscopicTrafficSimulator:
             if (u, v, key) not in self.closed_edges
         )
         
+        # Capture population data
+        node_populations = {node: self.G.nodes[node].get('population', 0) 
+                          for node in self.G.nodes()}
+        node_daily_trips = {node: self.G.nodes[node].get('daily_trips', 0) 
+                          for node in self.G.nodes()}
+        
         snapshot = TrafficSnapshot(
             timestamp=self.simulation_time,
             edge_travel_times=self.current_travel_times.copy(),
             edge_congestion=self.congestion_factors.copy(),
             closed_edges=self.closed_edges.copy(),
-            total_network_delay=total_delay
+            total_network_delay=total_delay,
+            node_populations=node_populations,
+            node_daily_trips=node_daily_trips
         )
         
         self.snapshots.append(snapshot)
@@ -350,7 +406,7 @@ class MacroscopicTrafficSimulator:
             )
             return path
         except nx.NetworkXNoPath:
-            print(f"⚠️  No path from {source} to {target}")
+            print(f"[WARNING]️  No path from {source} to {target}")
             return None
     
     def get_path_travel_time(self, path: List[int]) -> float:
@@ -401,7 +457,7 @@ class MacroscopicTrafficSimulator:
         with open(filename, 'wb') as f:
             pickle.dump(training_data, f)
         
-        print(f"💾 Training data exported to {filename}")
+        print(f"[SAVE] Training data exported to {filename}")
         print(f"   Snapshots: {len(self.snapshots)}")
         print(f"   Duration: {self.simulation_time:.1f} minutes")
     
@@ -460,7 +516,7 @@ class MacroscopicTrafficSimulator:
             return
         
         print("\n" + "="*60)
-        print("📊 TRAFFIC STATISTICS")
+        print("[CHART] TRAFFIC STATISTICS")
         print("="*60)
         print(f"Simulation Time:     {stats['simulation_time']:.1f} minutes")
         print(f"Total Network Delay: {stats['total_network_delay']:.1f} minutes")
@@ -472,9 +528,9 @@ class MacroscopicTrafficSimulator:
         # Show metro vs road breakdown if metro exists
         if stats.get('metro_edges', 0) > 0:
             print("-" * 60)
-            print("🚇 METRO vs 🚗 ROAD COMPARISON")
+            print("[METRO] METRO vs [ROAD] ROAD COMPARISON")
             print("-" * 60)
-            print(f"Metro Edges:         {stats['metro_edges']} (Always clear! 🟢)")
+            print(f"Metro Edges:         {stats['metro_edges']} (Always clear! [OPEN])")
             print(f"Road Edges:          {stats['road_edges']}")
             print(f"Metro Congestion:    {stats.get('metro_avg_congestion', 1.0):.2f}x (Constant)")
             print(f"Road Congestion:     {stats.get('road_avg_congestion', 1.0):.2f}x")
@@ -500,7 +556,7 @@ def get_user_road_selection(sim: MacroscopicTrafficSimulator):
     edges = list(sim.G.edges(keys=True))
     
     if not edges:
-        print("❌ No edges available in the graph!")
+        print("[ERROR] No edges available in the graph!")
         return None
     
     print("\n" + "="*60)
@@ -508,7 +564,7 @@ def get_user_road_selection(sim: MacroscopicTrafficSimulator):
     print("="*60)
     
     # Show sample of available roads with details
-    print(f"\n📊 Total roads in network: {len(edges)}")
+    print(f"\n[CHART] Total roads in network: {len(edges)}")
     print("\nSample roads (showing first 20):")
     print("-" * 60)
     print(f"{'#':<5} {'From':<10} {'To':<10} {'Length(km)':<12} {'Speed(km/h)':<12}")
@@ -547,7 +603,7 @@ def get_user_road_selection(sim: MacroscopicTrafficSimulator):
         # Custom option
         if user_input == 'custom':
             try:
-                print("\n🔧 Custom Road Selection:")
+                print("\n[TOOL] Custom Road Selection:")
                 source = input("   Enter source node: ").strip()
                 target = input("   Enter target node: ").strip()
                 
@@ -563,18 +619,18 @@ def get_user_road_selection(sim: MacroscopicTrafficSimulator):
                     keys = list(sim.G[source][target].keys())
                     if len(keys) == 1:
                         selected = (source, target, keys[0])
-                        print(f"✅ Selected: Road {source} → {target}")
+                        print(f"[OK] Selected: Road {source} → {target}")
                         return selected
                     else:
                         print(f"   Multiple edges found ({len(keys)}). Using first one.")
                         selected = (source, target, keys[0])
                         return selected
                 else:
-                    print(f"❌ No road exists from {source} to {target}")
+                    print(f"[FAIL] No road exists from {source} to {target}")
                     print("   Try again or choose a different option.")
                     continue
             except Exception as e:
-                print(f"❌ Error: {e}")
+                print(f"[FAIL] Error: {e}")
                 continue
         
         # Number option
@@ -583,12 +639,12 @@ def get_user_road_selection(sim: MacroscopicTrafficSimulator):
             if 1 <= choice <= len(display_edges):
                 selected = display_edges[choice - 1]
                 u, v, key = selected
-                print(f"✅ Selected: Road #{choice} ({u} → {v})")
+                print(f"[OK] Selected: Road #{choice} ({u} → {v})")
                 return selected
             else:
-                print(f"❌ Please enter a number between 1 and {len(display_edges)}")
+                print(f"[FAIL] Please enter a number between 1 and {len(display_edges)}")
         except ValueError:
-            print("❌ Invalid input. Please try again.")
+            print("[ERROR] Invalid input. Please try again.")
 
 
 def demo_simulation():
@@ -598,13 +654,13 @@ def demo_simulation():
     This shows the pressure model in action without needing individual agents.
     Includes interactive user input for road closure.
     """
-    print("🌆 Loading city graph...")
+    print("[Loading city graph...]")
     
     try:
         G = nx.read_graphml('city_graph.graphml')
-        print(f"✅ Loaded graph with {G.number_of_nodes()} nodes")
+        print(f"[OK] Loaded graph with {G.number_of_nodes()} nodes")
     except FileNotFoundError:
-        print("⚠️  city_graph.graphml not found. Generating a simple test graph...")
+        print("[WARNING] city_graph.graphml not found. Generating a simple test graph...")
         G = nx.MultiDiGraph()
         
         # Create a simple grid network for demo
@@ -634,7 +690,7 @@ def demo_simulation():
     sim = MacroscopicTrafficSimulator(G, config)
     
     # Initial state
-    print("\n📍 Initial State")
+    print("\n[PIN] Initial State")
     sim.print_statistics()
     
     # Interactive road closure
@@ -646,7 +702,7 @@ def demo_simulation():
         sim.close_road(u, v, key)
     
     # Run simulation for 30 minutes
-    print("\n⏱️  Running simulation for 30 minutes...")
+    print("\n[TIME]️  Running simulation for 30 minutes...")
     for minute in range(30):
         sim.step(delta_time=1.0)
         
@@ -656,15 +712,15 @@ def demo_simulation():
     
     # Reopen the road
     if selected_edge:
-        print(f"\n✅ Reopening road after 30 minutes...")
+        print(f"\n[OK] Reopening road after 30 minutes...")
         sim.reopen_road(u, v, key)
     
     # Continue simulation
-    print("\n⏱️  Continuing for 20 more minutes...")
+    print("\n[TIME]️  Continuing for 20 more minutes...")
     for minute in range(20):
         sim.step(delta_time=1.0)
     
-    print("\n📍 Final State")
+    print("\n[PIN] Final State")
     sim.print_statistics()
     
     # Export training data

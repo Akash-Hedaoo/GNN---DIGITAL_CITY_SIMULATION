@@ -1,0 +1,2 @@
+*.pkl filter=lfs diff=lfs merge=lfs -text
+gnn_training_data.pkl filter=lfs diff=lfs merge=lfs -text

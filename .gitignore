@@ -41,6 +41,8 @@ env/
 env.bak/
 venv.bak/
 .venv/
+# .twin-city-env/
+twin-city-env/
 
 # Environments / dotenv
 .env
@@ -92,3 +94,5 @@ ehthumbs.db
 .graphml
 
 # End of .gitignore
+# pkl
+gnn_training_data.pkl
