@@ -94,3 +94,5 @@ ehthumbs.db
 .graphml
 
 # End of .gitignore
+# pkl
+gnn_training_data.pkl
