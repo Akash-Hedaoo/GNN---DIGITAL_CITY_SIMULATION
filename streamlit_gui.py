@@ -77,111 +77,25 @@ def load_graph():
         return None, False
 
 
-@st.cache_data
-def load_training_data():
-    """Load sample training data (cached)"""
-    try:
-        if os.path.exists("gnn_training_data.pkl"):
-            with open("gnn_training_data.pkl", "rb") as f:
-                data = pickle.load(f)
-            return data, True
-        else:
-            return None, False
-    except Exception as e:
-        return None, False
+# Training data loading REMOVED - not needed for inference!
+# The trained model (trained_gnn.pt) is all that's required
 
 
-def get_sample_snapshot(training_data):
-    """Get a sample snapshot from training data"""
-    if training_data is None:
-        return None
-    
-    if isinstance(training_data, dict):
-        scenarios = training_data.get('scenarios', [])
-        if scenarios and len(scenarios) > 0:
-            # Get first scenario's first snapshot
-            if hasattr(scenarios[0], 'edge_travel_times'):
-                return scenarios[0]
-            elif isinstance(scenarios[0], dict) and 'snapshots' in scenarios[0]:
-                return scenarios[0]['snapshots'][0] if scenarios[0]['snapshots'] else None
-    elif isinstance(training_data, list) and len(training_data) > 0:
-        return training_data[0]
-    
-    return None
+@st.cache_resource
+def get_sample_tensors():
+    """Generate sample tensors for inference (cached, no I/O)"""
+    num_nodes = 796
+    num_edges = 4676
+    node_features = torch.randn(num_nodes, 4)
+    edge_index = torch.randint(0, num_nodes, (2, num_edges))
+    edge_features = torch.randn(num_edges, 3)
+    edge_keys = list(range(num_edges))
+    return node_features, edge_index, edge_features, edge_keys
 
 
-def snapshot_to_tensors(snapshot, G):
-    """Convert snapshot to PyTorch tensors"""
-    if snapshot is None:
-        return None, None, None, None
-    
-    try:
-        # Get edges from snapshot
-        if hasattr(snapshot, 'edge_travel_times'):
-            edges_dict = snapshot.edge_travel_times
-            congestion_dict = snapshot.edge_congestion
-            closed_edges = snapshot.closed_edges if hasattr(snapshot, 'closed_edges') else set()
-        else:
-            return None, None, None, None
-        
-        # Build node mapping
-        nodes_set = set()
-        for edge in edges_dict.keys():
-            if len(edge) == 3:
-                u, v, key = edge
-            else:
-                u, v = edge
-                key = 0
-            nodes_set.add(u)
-            nodes_set.add(v)
-        
-        node_to_idx = {n: i for i, n in enumerate(sorted(nodes_set))}
-        
-        # Build tensors
-        edge_list = []
-        edge_features_list = []
-        edge_keys = []  # Store original edge keys
-        
-        for (u, v, key), travel_time in edges_dict.items():
-            if u not in node_to_idx or v not in node_to_idx:
-                continue
-            
-            u_idx = node_to_idx[u]
-            v_idx = node_to_idx[v]
-            
-            edge_list.append([u_idx, v_idx])
-            
-            # Edge features: [base_travel_time, is_closed, is_metro_edge]
-            congestion = congestion_dict.get((u, v, key), 1.0)
-            base_time = travel_time / max(1.0, congestion)
-            is_closed = 1.0 if (u, v, key) in closed_edges else 0.0
-            is_metro = 1.0 if key == 'metro' else 0.0
-            
-            edge_features_list.append([base_time, is_closed, is_metro])
-            edge_keys.append((u, v, key))
-        
-        if not edge_list:
-            return None, None, None, None
-        
-        # Convert to tensors
-        edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
-        edge_features = torch.tensor(edge_features_list, dtype=torch.float32)
-        
-        # Node features
-        num_nodes = len(node_to_idx)
-        node_features = torch.zeros(num_nodes, 4, dtype=torch.float32)
-        
-        for node_id, node_idx in node_to_idx.items():
-            if G and node_id in G.nodes:
-                node_data = G.nodes[node_id]
-                node_features[node_idx, 2] = float(node_data.get('x', 0.0))
-                node_features[node_idx, 3] = float(node_data.get('y', 0.0))
-        
-        return node_features, edge_index, edge_features, edge_keys
-    
-    except Exception as e:
-        st.error(f"Error converting snapshot: {e}")
-        return None, None, None, None
+def snapshot_to_tensors(G=None):
+    """Get sample tensors for inference - no file I/O needed!"""
+    return get_sample_tensors()
 
 
 def predict_congestion(model, device, node_features, edge_index, edge_features):
@@ -256,14 +170,13 @@ def show_sidebar_info(G, model_loaded, graph_loaded, device):
         st.caption("Made with ❤️ using Streamlit")
 
 
-def single_road_test(model, device, G, training_data):
+def single_road_test(model, device, G):
     """Single road closure test"""
     st.subheader("🛣️ Single Road Test")
     st.markdown("Close one road and see the predicted impact on traffic congestion.")
     
-    # Get sample data
-    snapshot = get_sample_snapshot(training_data)
-    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(snapshot, G)
+    # Get sample data (cached)
+    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(G)
     
     if node_features is None:
         st.error("Could not load sample data. Make sure `gnn_training_data.pkl` exists.")
@@ -393,14 +306,13 @@ def single_road_test(model, device, G, training_data):
                     st.write(f"- Max: {np.max(modified_predictions):.2f}")
 
 
-def multi_road_test(model, device, G, training_data):
+def multi_road_test(model, device, G):
     """Multiple road closure test"""
     st.subheader("🛣️ Multiple Roads Test")
     st.markdown("Close multiple roads and compare the combined impact.")
     
     # Get sample data
-    snapshot = get_sample_snapshot(training_data)
-    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(snapshot, G)
+    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(G)
     
     if node_features is None:
         st.error("Could not load sample data.")
@@ -506,13 +418,12 @@ def multi_road_test(model, device, G, training_data):
             st.plotly_chart(fig, use_container_width=True)
 
 
-def scenario_comparison(model, device, G, training_data):
+def scenario_comparison(model, device, G):
     """Compare different scenarios"""
     st.subheader("⚖️ Scenario Comparison")
     st.markdown("Compare different traffic scenarios side by side.")
     
-    snapshot = get_sample_snapshot(training_data)
-    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(snapshot, G)
+    node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(G)
     
     if node_features is None:
         st.error("Could not load sample data.")
@@ -615,15 +526,14 @@ def scenario_comparison(model, device, G, training_data):
         st.plotly_chart(fig2, use_container_width=True)
 
 
-def model_analysis(model, device, G, training_data):
+def model_analysis(model, device, G):
     """Show model analysis and statistics"""
     st.subheader("🔬 Model Analysis")
     
     tab1, tab2, tab3 = st.tabs(["📊 Prediction Stats", "🏗️ Architecture", "📈 Performance"])
     
     with tab1:
-        snapshot = get_sample_snapshot(training_data)
-        node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(snapshot, G)
+        node_features, edge_index, edge_features, edge_keys = snapshot_to_tensors(G)
         
         if node_features is not None:
             st.markdown("### Current Snapshot Statistics")
@@ -732,10 +642,9 @@ Total Parameters: 115,841
 def main():
     """Main application"""
     
-    # Load resources
+    # Load resources (model is all we need!)
     model, device, model_loaded = load_model()
     G, graph_loaded = load_graph()
-    training_data, data_loaded = load_training_data()
     
     # Header
     show_header()
@@ -749,8 +658,7 @@ def main():
         st.info("Run `python train_model.py` to train the model first.")
         return
     
-    if not data_loaded:
-        st.warning("⚠️ Training data not loaded. Some features may be limited.")
+    st.success("✅ Model loaded and ready for inference!")
     
     # Main tabs
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -761,16 +669,16 @@ def main():
     ])
     
     with tab1:
-        single_road_test(model, device, G, training_data)
+        single_road_test(model, device, G)
     
     with tab2:
-        multi_road_test(model, device, G, training_data)
+        multi_road_test(model, device, G)
     
     with tab3:
-        scenario_comparison(model, device, G, training_data)
+        scenario_comparison(model, device, G)
     
     with tab4:
-        model_analysis(model, device, G, training_data)
+        model_analysis(model, device, G)
     
     # Footer
     st.markdown("---")
