@@ -275,43 +275,212 @@ def show_sidebar_controls(G, model_loaded, graph_loaded, device):
     with st.sidebar:
         # Run Simulation Button
         st.markdown("### 🎮 Simulation Control")
-        run_button = st.button("▶️ Run Simulation", use_container_width=True, type="primary")
+        run_button = st.button("▶️ Run Simulation", width='stretch', type="primary", key="btn_run_simulation")
         
         st.markdown("---")
         
-        # Search/Find
-        st.text_input("🔍 Find node or area", placeholder="Search...")
+        # Search/Find Nodes
+        if G is not None and graph_loaded:
+            search_term = st.text_input("🔍 Find node or area", placeholder="Search node ID...", key="txt_search")
+            if search_term:
+                matching_nodes = [n for n in G.nodes() if str(search_term).lower() in str(n).lower()]
+                if matching_nodes:
+                    st.success(f"✅ Found {len(matching_nodes)} node(s)")
+                    if len(matching_nodes) <= 10:
+                        for node in matching_nodes:
+                            node_data = G.nodes[node]
+                            x = node_data.get('x', 'N/A')
+                            y = node_data.get('y', 'N/A')
+                            st.caption(f"🔹 {node}: ({x}, {y})")
+                    else:
+                        st.caption(f"Showing first 10: {', '.join(str(n) for n in matching_nodes[:10])}...")
+                else:
+                    st.warning(f"No nodes found matching '{search_term}'")
+        else:
+            st.text_input("🔍 Find node or area", placeholder="Graph not loaded", key="txt_search", disabled=True)
         
         st.markdown("---")
         
         # Simulation Settings
         with st.expander("⚙️ Simulation Settings", expanded=True):
-            speed = st.slider("Simulation Speed", 0.1, 3.0, 1.5, 0.1)
-            real_time = st.checkbox("Real-time Mode", value=True)
+            speed = st.slider("Simulation Speed", 0.1, 3.0, 1.5, 0.1, key="sim_speed")
+            real_time = st.checkbox("Real-time Mode", value=True, key="chk_realtime")
             
             col1, col2 = st.columns(2)
             with col1:
-                st.button("⏸️ Pause", use_container_width=True)
+                st.button("⏸️ Pause", width='stretch', key="btn_pause")
             with col2:
-                st.button("🔄 Reset", use_container_width=True)
+                st.button("🔄 Reset", width='stretch', key="btn_reset")
         
         st.markdown("---")
         
         # Node/Edge Management
         with st.expander("🛠️ Node/Edge Management"):
             st.markdown("**Quick Actions:**")
-            st.button("➕ Add Node", use_container_width=True)
-            st.button("🗑️ Delete Node", use_container_width=True)
-            st.button("🔗 Add Edge", use_container_width=True)
+            
+            if st.button("➕ Add Node", width='stretch', key="btn_add_node"):
+                st.session_state['show_add_node'] = not st.session_state.get('show_add_node', False)
+            
+            if st.session_state.get('show_add_node', False):
+                st.info("💡 Click on the map to set X,Y coordinates automatically!")
+                with st.form("add_node_form"):
+                    node_id = st.text_input("Node ID", placeholder="e.g., node_1000")
+                    
+                    # Check for clicked coordinates from map
+                    clicked_x = st.session_state.get('clicked_x', 0.0)
+                    clicked_y = st.session_state.get('clicked_y', 0.0)
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        x_coord = st.number_input("X Coordinate", value=float(clicked_x), format="%.6f")
+                    with col2:
+                        y_coord = st.number_input("Y Coordinate", value=float(clicked_y), format="%.6f")
+                    
+                    st.caption(f"📍 Click on map or enter coordinates manually")
+                    
+                    col_submit, col_cancel = st.columns(2)
+                    with col_submit:
+                        submitted = st.form_submit_button("Add", type="primary")
+                        if submitted and node_id and G is not None:
+                            G.add_node(node_id, x=x_coord, y=y_coord)
+                            st.success(f"✅ Added node {node_id} at ({x_coord:.2f}, {y_coord:.2f})")
+                            st.session_state['show_add_node'] = False
+                            st.session_state['clicked_x'] = 0.0
+                            st.session_state['clicked_y'] = 0.0
+                            st.rerun()
+                    with col_cancel:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state['show_add_node'] = False
+                            st.session_state['clicked_x'] = 0.0
+                            st.session_state['clicked_y'] = 0.0
+                            st.rerun()
+            
+            if st.button("🗑️ Delete Node", width='stretch', key="btn_delete_node"):
+                st.session_state['show_delete_node'] = not st.session_state.get('show_delete_node', False)
+            
+            if st.session_state.get('show_delete_node', False):
+                with st.form("delete_node_form"):
+                    if G is not None:
+                        all_nodes = sorted(list(G.nodes()))
+                        st.caption(f"Total nodes: {len(all_nodes)}")
+                        node_to_delete = st.text_input(
+                            "Node ID", 
+                            placeholder="Type node ID to delete",
+                            help=f"Available nodes: {', '.join(str(n) for n in all_nodes[:10])}..."
+                        )
+                    else:
+                        node_to_delete = st.text_input("Node ID")
+                    
+                    col_submit, col_cancel = st.columns(2)
+                    with col_submit:
+                        submitted = st.form_submit_button("Delete", type="primary")
+                        if submitted and node_to_delete and G is not None:
+                            if node_to_delete in G.nodes():
+                                G.remove_node(node_to_delete)
+                                st.success(f"✅ Deleted node {node_to_delete}")
+                                st.session_state['show_delete_node'] = False
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Node '{node_to_delete}' not found!")
+                    with col_cancel:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state['show_delete_node'] = False
+                            st.rerun()
+            
+            if st.button("🔗 Add Edge", width='stretch', key="btn_add_edge"):
+                st.session_state['show_add_edge'] = not st.session_state.get('show_add_edge', False)
+            
+            if st.session_state.get('show_add_edge', False):
+                with st.form("add_edge_form"):
+                    if G is not None:
+                        all_nodes = sorted(list(G.nodes()))
+                        st.caption(f"Total nodes available: {len(all_nodes)}")
+                        sample_nodes = ', '.join(str(n) for n in all_nodes[:10])
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            source_node = st.text_input(
+                                "From Node", 
+                                placeholder="Type source node ID",
+                                help=f"Examples: {sample_nodes}..."
+                            )
+                        with col2:
+                            target_node = st.text_input(
+                                "To Node", 
+                                placeholder="Type target node ID",
+                                help=f"Examples: {sample_nodes}..."
+                            )
+                    else:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            source_node = st.text_input("From Node")
+                        with col2:
+                            target_node = st.text_input("To Node")
+                    
+                    col_submit, col_cancel = st.columns(2)
+                    with col_submit:
+                        submitted = st.form_submit_button("Add", type="primary")
+                        if submitted and source_node and target_node and G is not None:
+                            if source_node in G.nodes() and target_node in G.nodes():
+                                G.add_edge(source_node, target_node)
+                                st.success(f"✅ Added edge {source_node} → {target_node}")
+                                st.session_state['show_add_edge'] = False
+                                st.rerun()
+                            else:
+                                missing = []
+                                if source_node not in G.nodes():
+                                    missing.append(f"source '{source_node}'")
+                                if target_node not in G.nodes():
+                                    missing.append(f"target '{target_node}'")
+                                st.error(f"❌ Node(s) not found: {', '.join(missing)}")
+                    with col_cancel:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state['show_add_edge'] = False
+                            st.rerun()
+        
+        st.markdown("---")
+        
+        # Node Browser
+        if G is not None and graph_loaded:
+            with st.expander("📋 Node Browser"):
+                all_nodes = sorted(list(G.nodes()))
+                st.caption(f"**Total Nodes:** {len(all_nodes)}")
+                
+                # Paginated view
+                nodes_per_page = 20
+                total_pages = (len(all_nodes) + nodes_per_page - 1) // nodes_per_page
+                page = st.number_input("Page", min_value=1, max_value=total_pages, value=1, key="node_page")
+                
+                start_idx = (page - 1) * nodes_per_page
+                end_idx = min(start_idx + nodes_per_page, len(all_nodes))
+                
+                st.caption(f"Showing {start_idx + 1}-{end_idx} of {len(all_nodes)}")
+                
+                for node in all_nodes[start_idx:end_idx]:
+                    node_data = G.nodes[node]
+                    x = node_data.get('x', 'N/A')
+                    y = node_data.get('y', 'N/A')
+                    degree = G.degree(node)
+                    st.text(f"{node} | Degree: {degree} | ({x}, {y})")
         
         st.markdown("---")
         
         # Visualization Layers
         with st.expander("🎨 Visualization Layers"):
-            st.checkbox("Traffic Flow", value=True)
-            st.checkbox("Congestion Heatmap", value=True)
-            st.checkbox("Metro Network", value=False)
-            st.checkbox("Population Density", value=False)
+            st.markdown("**Control what's displayed:**")
+            show_traffic = st.checkbox("Traffic Flow (Road Edges)", value=True, key="chk_traffic_flow")
+            show_congestion = st.checkbox("Congestion Heatmap (Road Nodes)", value=True, key="chk_congestion")
+            show_population = st.checkbox("Population Density (Node Size)", value=False, key="chk_population")
+            
+            st.caption("ℹ️ All node types (hospitals, schools, metro, etc.) are always visible with unique symbols and colors")
+            
+            # Store in session state
+            st.session_state['viz_layers'] = {
+                'traffic': show_traffic,
+                'congestion': show_congestion,
+                'metro': False,  # Metro nodes are now shown by default as node types
+                'population': show_population
+            }
         
         st.markdown("---")
         
@@ -338,7 +507,7 @@ def show_sidebar_controls(G, model_loaded, graph_loaded, device):
         st.markdown("---")
         st.caption("🚦 Digital Twin City | v2.0")
     
-    return run_button
+    return run_button, st.session_state.get('viz_layers', {})
 
 
 def single_road_test(model, device, G):
@@ -364,17 +533,19 @@ def single_road_test(model, device, G):
             min_value=0,
             max_value=num_edges - 1,
             value=100,
-            help="Each number represents a road segment in the city"
+            help="Each number represents a road segment in the city",
+            key="single_road_num"
         )
     
     with col2:
         action = st.radio(
             "Action",
             ["Close Road", "Open Road"],
-            help="Close = Block traffic, Open = Allow traffic"
+            help="Close = Block traffic, Open = Allow traffic",
+            key="radio_action"
         )
     
-    if st.button("🔮 Predict Impact", type="primary", use_container_width=True):
+    if st.button("🔮 Predict Impact", type="primary", width='stretch', key="btn_predict_single"):
         with st.spinner("Running AI prediction..."):
             # Get base prediction
             base_predictions = predict_congestion(model, device, node_features, edge_index, edge_features)
@@ -457,7 +628,7 @@ def single_road_test(model, device, G):
                 height=400
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Additional stats
             with st.expander("📊 Detailed Statistics"):
@@ -496,7 +667,8 @@ def multi_road_test(model, device, G):
     input_method = st.radio(
         "Selection Method",
         ["Manual Entry", "Range Selection", "Random Selection"],
-        horizontal=True
+        horizontal=True,
+        key="radio_input_method"
     )
     
     roads_to_close = []
@@ -505,7 +677,8 @@ def multi_road_test(model, device, G):
         roads_input = st.text_input(
             "Enter road numbers (comma-separated)",
             placeholder="e.g., 100, 200, 300, 450",
-            help="Enter road numbers separated by commas"
+            help="Enter road numbers separated by commas",
+            key="txt_manual_roads"
         )
         if roads_input:
             try:
@@ -517,14 +690,14 @@ def multi_road_test(model, device, G):
     elif input_method == "Range Selection":
         col1, col2 = st.columns(2)
         with col1:
-            start = st.number_input("Start", min_value=0, max_value=num_edges-1, value=100)
+            start = st.number_input("Start", min_value=0, max_value=num_edges-1, value=100, key="num_range_start")
         with col2:
-            end = st.number_input("End", min_value=0, max_value=num_edges-1, value=110)
+            end = st.number_input("End", min_value=0, max_value=num_edges-1, value=110, key="num_range_end")
         roads_to_close = list(range(start, min(end + 1, num_edges)))
     
     else:  # Random
-        num_random = st.slider("Number of random roads", 1, 50, 10)
-        if st.button("🎲 Generate Random"):
+        num_random = st.slider("Number of random roads", 1, 50, 10, key="num_random_roads")
+        if st.button("🎲 Generate Random", key="btn_generate_random"):
             roads_to_close = list(np.random.choice(num_edges, size=num_random, replace=False))
             st.session_state['random_roads'] = roads_to_close
         
@@ -534,7 +707,7 @@ def multi_road_test(model, device, G):
     if roads_to_close:
         st.info(f"Selected {len(roads_to_close)} roads: {roads_to_close[:10]}{'...' if len(roads_to_close) > 10 else ''}")
     
-    if st.button("🔮 Predict Combined Impact", type="primary", disabled=len(roads_to_close) == 0):
+    if st.button("🔮 Predict Combined Impact", type="primary", disabled=len(roads_to_close) == 0, key="btn_predict_multi"):
         with st.spinner(f"Analyzing {len(roads_to_close)} road closures..."):
             # Base prediction
             base_predictions = predict_congestion(model, device, node_features, edge_index, edge_features)
@@ -587,7 +760,7 @@ def multi_road_test(model, device, G):
                 height=400
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 
 def scenario_comparison(model, device, G):
@@ -615,10 +788,11 @@ def scenario_comparison(model, device, G):
     selected_scenarios = st.multiselect(
         "Select Scenarios to Compare",
         list(scenarios.keys()),
-        default=["Normal Traffic", "Close 10 Random Roads"]
+        default=["Normal Traffic", "Close 10 Random Roads"],
+        key="multiselect_scenarios"
     )
     
-    if st.button("📊 Compare Scenarios", type="primary", disabled=len(selected_scenarios) < 2):
+    if st.button("📊 Compare Scenarios", type="primary", disabled=len(selected_scenarios) < 2, key="btn_compare_scenarios"):
         results = {}
         
         progress = st.progress(0)
@@ -676,7 +850,7 @@ def scenario_comparison(model, device, G):
             height=400
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Distribution comparison
         fig2 = go.Figure()
@@ -695,7 +869,7 @@ def scenario_comparison(model, device, G):
             height=400
         )
         
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
 
 
 def model_analysis(model, device, G):
@@ -732,7 +906,7 @@ def model_analysis(model, device, G):
                     labels={'x': 'Congestion Factor', 'y': 'Count'}
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
     
     with tab2:
         st.markdown("### GATv2 Architecture")
@@ -804,59 +978,210 @@ Total Parameters: 115,841
             yaxis_title="Loss (MSE)",
             height=400
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================
 # MAIN APP
 # ============================================================
 
-def create_map_visualization(G, predictions=None):
-    """Create interactive map visualization"""
+def create_map_visualization(G, predictions=None, viz_layers=None):
+    """Create interactive map visualization with layer controls"""
     if G is None:
         return None
     
+    if viz_layers is None:
+        viz_layers = {'traffic': True, 'congestion': True, 'metro': False, 'population': False}
+    
+    # Node type configuration (amenity-based)
+    node_types = {
+        'hospital': {'color': '#e74c3c', 'symbol': 'cross', 'size': 12, 'name': '🏥 Hospital'},
+        'hospital+metro_station': {'color': '#c0392b', 'symbol': 'cross', 'size': 14, 'name': '🏥🚇 Hospital+Metro'},
+        'metro_station': {'color': '#9b59b6', 'symbol': 'square', 'size': 10, 'name': '🚇 Metro Station'},
+        'school': {'color': '#3498db', 'symbol': 'triangle-up', 'size': 10, 'name': '🏫 School'},
+        'school+metro_station': {'color': '#2980b9', 'symbol': 'triangle-up', 'size': 12, 'name': '🏫🚇 School+Metro'},
+        'park': {'color': '#27ae60', 'symbol': 'diamond', 'size': 9, 'name': '🌳 Park'},
+        'park+metro_station': {'color': '#229954', 'symbol': 'diamond', 'size': 11, 'name': '🌳🚇 Park+Metro'},
+        'mall': {'color': '#f39c12', 'symbol': 'hexagon', 'size': 11, 'name': '🏪 Mall'},
+        'office': {'color': '#34495e', 'symbol': 'square', 'size': 8, 'name': '🏢 Office'},
+        'factory': {'color': '#e67e22', 'symbol': 'pentagon', 'size': 10, 'name': '🏭 Factory'},
+        'warehouse': {'color': '#d35400', 'symbol': 'hexagon2', 'size': 9, 'name': '🏪 Warehouse'},
+        'community_center': {'color': '#16a085', 'symbol': 'star', 'size': 10, 'name': '🏛️ Community Center'},
+        'road': {'color': '#95a5a6', 'symbol': 'circle', 'size': 4, 'name': '🛣️ Road Junction'},
+    }
+    
     try:
-        # Extract node positions
+        # Extract node positions and categorize by type
         positions = {}
+        nodes_by_type = {amenity: [] for amenity in node_types.keys()}
+        
         for node in G.nodes():
             node_data = G.nodes[node]
             x = float(node_data.get('x', 0))
             y = float(node_data.get('y', 0))
             positions[node] = (x, y)
+            
+            # Categorize node by amenity
+            amenity = node_data.get('amenity', 'road')
+            if amenity in nodes_by_type:
+                nodes_by_type[amenity].append(node)
+            else:
+                nodes_by_type['road'].append(node)
         
         # Create figure
         fig = go.Figure()
         
-        # Add edges
-        edge_x = []
-        edge_y = []
-        for edge in G.edges():
-            x0, y0 = positions.get(edge[0], (0, 0))
-            x1, y1 = positions.get(edge[1], (0, 0))
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
+        # Add edges - separate metro lines from roads
+        if viz_layers.get('traffic', True):
+            # Separate metro and road edges
+            metro_edges = []
+            road_edges = []
+            metro_lines_by_color = {}  # Group metro lines by color
+            
+            for edge in G.edges(data=True):
+                edge_data = edge[2]
+                if edge_data.get('is_metro', False) or edge_data.get('transport_mode') == 'metro':
+                    line_color = edge_data.get('line_color', '#9b59b6')
+                    line_name = edge_data.get('line_name', 'Metro')
+                    if line_color not in metro_lines_by_color:
+                        metro_lines_by_color[line_color] = {'edges': [], 'name': line_name}
+                    metro_lines_by_color[line_color]['edges'].append((edge[0], edge[1]))
+                else:
+                    road_edges.append((edge[0], edge[1]))
+            
+            # Draw road edges (gray, thin) - with click support
+            if road_edges:
+                road_x = []
+                road_y = []
+                road_hover = []
+                for edge in road_edges:
+                    x0, y0 = positions.get(edge[0], (0, 0))
+                    x1, y1 = positions.get(edge[1], (0, 0))
+                    road_x.extend([x0, x1, None])
+                    road_y.extend([y0, y1, None])
+                    # Add hover info for middle of edge
+                    road_hover.extend([
+                        f"Road: {edge[0]} → {edge[1]}<br>Click to block/unblock",
+                        "",
+                        ""
+                    ])
+                
+                fig.add_trace(go.Scatter(
+                    x=road_x, y=road_y,
+                    mode='lines',
+                    line=dict(width=0.5, color='#4a5568', dash='solid'),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=road_hover,
+                    name='🛣️ Roads',
+                    showlegend=True,
+                    legendgroup='roads',
+                    opacity=0.4,
+                    customdata=[[f"{e[0]}|{e[1]}", f"{e[0]}|{e[1]}", f"{e[0]}|{e[1]}"] for e in road_edges]
+                ))
+            
+            # Draw metro lines (colored, thicker, dashed) - with click support
+            for line_color, line_info in metro_lines_by_color.items():
+                metro_x = []
+                metro_y = []
+                metro_hover = []
+                for edge in line_info['edges']:
+                    x0, y0 = positions.get(edge[0], (0, 0))
+                    x1, y1 = positions.get(edge[1], (0, 0))
+                    metro_x.extend([x0, x1, None])
+                    metro_y.extend([y0, y1, None])
+                    metro_hover.extend([
+                        f"Metro: {edge[0]} → {edge[1]}<br>{line_info['name']}<br>Click to block/unblock",
+                        "",
+                        ""
+                    ])
+                
+                fig.add_trace(go.Scatter(
+                    x=metro_x, y=metro_y,
+                    mode='lines',
+                    line=dict(width=3, color=line_color, dash='dot'),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=metro_hover,
+                    name=f'🚇 {line_info["name"]}',
+                    showlegend=True,
+                    legendgroup=f'metro_{line_color}',
+                    opacity=0.9,
+                    customdata=[[f"{e[0]}|{e[1]}", f"{e[0]}|{e[1]}", f"{e[0]}|{e[1]}"] for e in line_info['edges']]
+                ))
         
-        fig.add_trace(go.Scatter(
-            x=edge_x, y=edge_y,
-            mode='lines',
-            line=dict(width=1, color='#3498db'),
-            hoverinfo='none',
-            showlegend=False
-        ))
-        
-        # Add nodes
-        node_x = [positions[node][0] for node in G.nodes()]
-        node_y = [positions[node][1] for node in G.nodes()]
-        
-        fig.add_trace(go.Scatter(
-            x=node_x, y=node_y,
-            mode='markers',
-            marker=dict(size=5, color='#2ecc71', line=dict(width=1, color='white')),
-            hoverinfo='text',
-            text=[f"Node: {node}" for node in G.nodes()],
-            showlegend=False
-        ))
+        # Add nodes by type with different symbols and colors
+        for amenity, node_list in nodes_by_type.items():
+            if not node_list:  # Skip empty categories
+                continue
+            
+            node_config = node_types.get(amenity, node_types['road'])
+            
+            node_x = [positions[node][0] for node in node_list]
+            node_y = [positions[node][1] for node in node_list]
+            
+            # Build hover text with node info
+            hover_texts = []
+            for node in node_list:
+                node_data = G.nodes[node]
+                zone = node_data.get('zone', 'N/A')
+                population = node_data.get('population', 'N/A')
+                station_name = node_data.get('station_name', '')
+                
+                hover_text = f"<b>Node:</b> {node}<br>"
+                hover_text += f"<b>Type:</b> {amenity}<br>"
+                hover_text += f"<b>Zone:</b> {zone}<br>"
+                hover_text += f"<b>Population:</b> {population}"
+                if station_name:
+                    hover_text += f"<br><b>Station:</b> {station_name}"
+                hover_texts.append(hover_text)
+            
+            # Adjust size based on population if layer is enabled
+            if viz_layers.get('population', False):
+                node_size = []
+                for node in node_list:
+                    pop = G.nodes[node].get('population', 50)
+                    size = max(node_config['size'], min(pop / 5, 20))  # Scale based on population
+                    node_size.append(size)
+            else:
+                node_size = node_config['size']
+            
+            # Apply congestion coloring if enabled and predictions available
+            if viz_layers.get('congestion', True) and predictions is not None and amenity == 'road':
+                # Only apply congestion to road nodes
+                node_colors = []
+                for node in node_list:
+                    node_idx = list(G.nodes()).index(node)
+                    if node_idx < len(predictions):
+                        congestion = predictions[node_idx]
+                        # Map congestion to color
+                        if congestion < 0.3:
+                            color = '#2ecc71'  # Green
+                        elif congestion < 0.7:
+                            color = '#f39c12'  # Orange
+                        else:
+                            color = '#e74c3c'  # Red
+                        node_colors.append(color)
+                    else:
+                        node_colors.append(node_config['color'])
+            else:
+                node_colors = node_config['color']
+            
+            fig.add_trace(go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers',
+                marker=dict(
+                    size=node_size,
+                    color=node_colors,
+                    symbol=node_config['symbol'],
+                    line=dict(width=1, color='white'),
+                    opacity=0.9
+                ),
+                hovertemplate='%{text}<br><i>Click to remove node</i><extra></extra>',
+                text=hover_texts,
+                name=node_config['name'],
+                showlegend=True,
+                legendgroup=amenity,
+                customdata=[[str(node)] for node in node_list]  # Store node ID for click handling
+            ))
         
         fig.update_layout(
             plot_bgcolor='#1a2332',
@@ -865,7 +1190,19 @@ def create_map_visualization(G, predictions=None):
             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             height=600,
             margin=dict(l=0, r=0, t=0, b=0),
-            hovermode='closest'
+            hovermode='closest',
+            legend=dict(
+                bgcolor='rgba(26, 35, 50, 0.95)',
+                bordercolor='#2196F3',
+                borderwidth=1,
+                font=dict(color='#b0bec5', size=10),
+                x=1.02,
+                y=1,
+                xanchor='left',
+                yanchor='top',
+                itemsizing='constant'
+            ),
+            clickmode='event+select'
         )
         
         return fig
@@ -956,17 +1293,21 @@ def main():
         st.session_state.simulation_running = False
     if 'random_roads' not in st.session_state:
         st.session_state.random_roads = []
+    if 'clicked_edge' not in st.session_state:
+        st.session_state.clicked_edge = None
+    if 'clicked_node' not in st.session_state:
+        st.session_state.clicked_node = None
     
     # Load resources
-    # Load resources (model is all we need!)
     model, device, model_loaded = load_model()
     G, graph_loaded = load_graph()
+    training_data, data_loaded = load_training_data()
     
     # Header
     show_header()
     
     # Sidebar
-    run_button = show_sidebar_controls(G, model_loaded, graph_loaded, device)
+    run_button, viz_layers = show_sidebar_controls(G, model_loaded, graph_loaded, device)
     
     # Handle Run Simulation button
     if run_button:
@@ -981,6 +1322,9 @@ def main():
         st.error("⚠️ Model not loaded! Make sure `trained_gnn.pt` exists.")
         st.info("Run `python train_model.py` to train the model first.")
         return
+    
+    if not data_loaded:
+        st.warning("⚠️ Training data not loaded. Some features may be limited.")
     
     st.success("✅ Model loaded and ready for inference!")
     
@@ -1009,20 +1353,153 @@ def main():
                 
                 st.info("💡 Use the Analytics and Experiments tabs to test road closures and scenarios.")
             
+            # Quick actions for edge/node management
+            with st.expander("⚡ Quick Actions - Block Edge or Remove Node"):
+                action_tab1, action_tab2 = st.tabs(["🚫 Block/Unblock Edge", "🗑️ Remove Node"])
+                
+                with action_tab1:
+                    st.markdown("**Select an edge to block/unblock:**")
+                    if G is not None and graph_loaded:
+                        # Show sample edges
+                        edges_list = list(G.edges())[:100]  # First 100 for dropdown
+                        edge_options = [f"{e[0]} → {e[1]}" for e in edges_list]
+                        
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            selected_edge_str = st.selectbox("Select Edge", edge_options, key="select_edge_dropdown")
+                            if selected_edge_str:
+                                parts = selected_edge_str.split(" → ")
+                                if len(parts) == 2:
+                                    selected_edge = (parts[0], parts[1])
+                                    edge_data = G[selected_edge[0]][selected_edge[1]]
+                                    is_closed = edge_data.get('is_closed', 0)
+                                    st.caption(f"Status: {'🚫 Blocked' if is_closed else '✅ Open'}")
+                        
+                        with col2:
+                            st.write("")
+                            st.write("")
+                            if st.button("Toggle", key="toggle_edge_btn", type="primary"):
+                                if selected_edge_str:
+                                    parts = selected_edge_str.split(" → ")
+                                    if len(parts) == 2:
+                                        edge = (parts[0], parts[1])
+                                        current_status = G[edge[0]][edge[1]].get('is_closed', 0)
+                                        G[edge[0]][edge[1]]['is_closed'] = 0 if current_status else 1
+                                        st.success(f"✅ Edge {'unblocked' if current_status else 'blocked'}!")
+                                        st.rerun()
+                
+                with action_tab2:
+                    st.markdown("**Select a node to remove:**")
+                    if G is not None and graph_loaded:
+                        node_search = st.text_input("Search Node ID", placeholder="Type node ID...", key="node_search_quick")
+                        
+                        if node_search:
+                            matching = [n for n in G.nodes() if str(node_search).lower() in str(n).lower()]
+                            if matching:
+                                selected_node = st.selectbox("Matching Nodes", matching[:20], key="select_node_dropdown")
+                                if selected_node and selected_node in G.nodes():
+                                    node_data = G.nodes[selected_node]
+                                    st.caption(f"Type: {node_data.get('amenity', 'unknown')}")
+                                    st.caption(f"Connections: {G.degree(selected_node)}")
+                                    
+                                    if st.button("🗑️ Remove Node", key="remove_node_btn", type="primary"):
+                                        G.remove_node(selected_node)
+                                        st.success(f"✅ Node {selected_node} removed!")
+                                        st.rerun()
+                            else:
+                                st.warning(f"No nodes found matching '{node_search}'")
+            
+            # Show action dialogs first if items are selected
+            if 'clicked_edge' in st.session_state and st.session_state.get('clicked_edge'):
+                edge = st.session_state['clicked_edge']
+                with st.container():
+                    st.markdown("---")
+                    st.warning(f"🛣️ **Edge Selected:** {edge[0]} → {edge[1]}")
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        if st.button("🚫 Block Edge", type="primary", use_container_width=True):
+                            if G.has_edge(edge[0], edge[1]):
+                                G[edge[0]][edge[1]]['is_closed'] = 1
+                                st.success(f"✅ Blocked!")
+                                st.session_state['clicked_edge'] = None
+                                st.rerun()
+                    with col_b:
+                        if st.button("✅ Unblock Edge", use_container_width=True):
+                            if G.has_edge(edge[0], edge[1]):
+                                G[edge[0]][edge[1]]['is_closed'] = 0
+                                st.success(f"✅ Unblocked!")
+                                st.session_state['clicked_edge'] = None
+                                st.rerun()
+                    with col_c:
+                        if st.button("❌ Cancel", use_container_width=True):
+                            st.session_state['clicked_edge'] = None
+                            st.rerun()
+                    st.markdown("---")
+            
+            if 'clicked_node' in st.session_state and st.session_state.get('clicked_node'):
+                node = st.session_state['clicked_node']
+                if node in G.nodes():
+                    with st.container():
+                        st.markdown("---")
+                        node_data = G.nodes[node]
+                        amenity = node_data.get('amenity', 'unknown')
+                        st.error(f"🗑️ **Node Selected:** {node} ({amenity})")
+                        st.caption(f"Connected edges: {G.degree(node)}")
+                        
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("🗑️ Remove Node", type="primary", use_container_width=True):
+                                G.remove_node(node)
+                                st.success(f"✅ Node removed!")
+                                st.session_state['clicked_node'] = None
+                                st.rerun()
+                        with col_b:
+                            if st.button("❌ Cancel", use_container_width=True):
+                                st.session_state['clicked_node'] = None
+                                st.rerun()
+                        st.markdown("---")
+            
             if graph_loaded and G is not None:
-                fig = create_map_visualization(G)
+                fig = create_map_visualization(G, viz_layers=viz_layers)
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    # Display map with click event support
+                    selected = st.plotly_chart(fig, width='stretch', key="main_map", on_select="rerun")
+                    
+                    # Handle clicks on nodes and edges
+                    if selected and hasattr(selected, 'selection') and selected.selection:
+                        if 'points' in selected.selection and selected.selection['points']:
+                            point = selected.selection['points'][0]
+                            
+                            # Check if adding node mode is active
+                            if st.session_state.get('show_add_node', False):
+                                st.session_state['clicked_x'] = point.get('x', 0.0)
+                                st.session_state['clicked_y'] = point.get('y', 0.0)
+                                st.rerun()
+                            
+                            # Handle node clicks (remove node) or edge clicks
+                            elif 'customdata' in point and point['customdata']:
+                                clicked_data = point['customdata'][0] if isinstance(point['customdata'], list) else point['customdata']
+                                
+                                # Check if it's an edge (contains |)
+                                if '|' in str(clicked_data):
+                                    edge_nodes = str(clicked_data).split('|')
+                                    if len(edge_nodes) == 2:
+                                        st.session_state['clicked_edge'] = (edge_nodes[0], edge_nodes[1])
+                                        st.rerun()
+                                # Otherwise it's a node
+                                else:
+                                    st.session_state['clicked_node'] = str(clicked_data)
+                                    st.rerun()
             else:
                 st.info("Graph not loaded. Please check city_graph.graphml file.")
         
         with view_tabs[1]:
             # Single road test
-            single_road_test(model, device, G, training_data)
+            single_road_test(model, device, G)
         
         with view_tabs[2]:
             # Multiple road test
-            multi_road_test(model, device, G, training_data)
+            multi_road_test(model, device, G)
     
     with col_right:
         # Right panel with metrics
@@ -1041,11 +1518,11 @@ def main():
             st.markdown("---")
             st.markdown("### 📈 Network Stability")
             fig = create_network_stability_chart()
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         with inspector_tab:
             st.markdown("### 🔍 Node Inspector")
-            node_id = st.text_input("Node ID", placeholder="Enter node ID...")
+            node_id = st.text_input("Node ID", placeholder="Enter node ID...", key="txt_node_id")
             if node_id and graph_loaded and G is not None:
                 if node_id in G.nodes:
                     node_data = G.nodes[node_id]
@@ -1074,29 +1551,10 @@ def main():
         analysis_tabs = st.tabs(["⚖️ Scenario Comparison", "🤖 Model Analysis"])
         
         with analysis_tabs[0]:
-            scenario_comparison(model, device, G, training_data)
+            scenario_comparison(model, device, G)
         
         with analysis_tabs[1]:
-            model_analysis(model, device, G, training_data)
-    # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🛣️ Single Road Test",
-        "🛣️ Multiple Roads Test", 
-        "⚖️ Scenario Comparison",
-        "🔬 Model Analysis"
-    ])
-    
-    with tab1:
-        single_road_test(model, device, G)
-    
-    with tab2:
-        multi_road_test(model, device, G)
-    
-    with tab3:
-        scenario_comparison(model, device, G)
-    
-    with tab4:
-        model_analysis(model, device, G)
+            model_analysis(model, device, G)
     
     # Footer
     st.markdown("---")

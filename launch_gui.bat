@@ -8,6 +8,9 @@ echo   Digital Twin City Simulation - Streamlit GUI
 echo ========================================================
 echo.
 
+REM Change to the script's directory
+cd /d "%~dp0"
+
 REM Activate virtual environment
 if exist "twin-city-env\Scripts\activate.bat" (
     echo [*] Activating virtual environment...
