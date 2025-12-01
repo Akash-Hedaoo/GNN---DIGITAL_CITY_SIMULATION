@@ -308,9 +308,9 @@ def show_sidebar_controls(G, model_loaded, graph_loaded, device):
             
             col1, col2 = st.columns(2, gap="small")
             with col1:
-                st.button("⏸️ Pause", width='stretch', key="btn_pause", key="pause_btn")
+                st.button("⏸️ Pause", width='stretch', key="btn_pause")
             with col2:
-                st.button("🔄 Reset", use_container_width=True, key="reset_btn")
+                st.button("🔄 Reset", width='stretch', key="btn_reset")
         
         st.markdown("---")
         
@@ -538,8 +538,7 @@ def single_road_test(model, device, G):
             max_value=num_edges - 1,
             value=100,
             help="Each number represents a road segment in the city",
-            key="single_road_num",
-            key="single_road_selector"
+            key="single_road_num"
         )
     
     with col2:
