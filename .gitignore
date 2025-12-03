@@ -34,7 +34,6 @@ venv.bak/
 twin-city-env/
 
 # PyTorch & ML models
-*.pt
 *.pth
 *.pkl
 *.pickle
@@ -101,6 +100,5 @@ gnn_training_data.pkl
 __pycache__/
 *.graphml
 *.pkl
-*.pt
 *.csv
 *.png
