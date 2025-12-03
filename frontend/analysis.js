@@ -32,10 +32,11 @@ async function init() {
 }
 
 function loadFromMapPage() {
-    const saved = localStorage.getItem('closedRoads');
+    const saved = localStorage.getItem('cityAnalysisData');
     if (saved) {
         try {
-            state.closedRoads = JSON.parse(saved);
+            const data = JSON.parse(saved);
+            state.closedRoads = data.closedRoads || [];
             displayBlockedRoads();
         } catch (e) {
             console.error('Failed to parse closed roads:', e);
