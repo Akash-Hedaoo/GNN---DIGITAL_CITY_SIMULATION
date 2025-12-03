@@ -35,7 +35,6 @@ twin-city-env/
 
 # PyTorch & ML models
 *.pth
-*.pkl
 *.pickle
 *.h5
 *.onnx
@@ -89,15 +88,9 @@ frontend/build/
 
 # Generated files
 *.html
-city_*.graphml
+
 gnn_training_data.pkl
-
-.graphml
-.csv
 .png
-
 .venv/
 __pycache__/
-*.graphml
-*.csv
-*.png
+
