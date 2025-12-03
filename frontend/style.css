@@ -447,6 +447,23 @@ body {
     /* Dark tiles don't need inversion */
 }
 
+/* Emoji marker styles */
+.emoji-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
+.emoji-marker {
+    font-size: 20px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.emoji-marker:hover {
+    transform: scale(1.3);
+}
+
 .leaflet-control-zoom {
     border: none !important;
 }
@@ -513,6 +530,12 @@ body {
     height: 12px;
     border-radius: 50%;
     border: 2px solid #fff;
+}
+
+.legend-emoji {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
 }
 
 .legend-color.closed {

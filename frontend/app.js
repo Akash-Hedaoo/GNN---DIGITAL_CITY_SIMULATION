@@ -409,72 +409,76 @@ function renderGraph() {
         let color = CONFIG.COLORS.node;
         let radius = 3;
         let isAmenity = false;
+        let emoji = null;
         const amenity = (node.amenity || 'none').toLowerCase();
         
-        // Determine color and size based on amenity type
+        // Determine emoji and properties based on amenity type
         if (amenity.includes('hospital')) {
-            color = CONFIG.COLORS.hospital;
-            radius = 8;
+            emoji = '🏥';
             isAmenity = true;
         } else if (amenity.includes('park')) {
-            color = CONFIG.COLORS.park;
-            radius = 7;
+            emoji = '🌳';
             isAmenity = true;
         } else if (amenity.includes('school')) {
-            color = CONFIG.COLORS.school;
-            radius = 7;
+            emoji = '🏫';
             isAmenity = true;
         } else if (amenity.includes('mall')) {
-            color = CONFIG.COLORS.mall;
-            radius = 8;
+            emoji = '🛒';
             isAmenity = true;
         } else if (amenity.includes('factory')) {
-            color = CONFIG.COLORS.factory;
-            radius = 6;
+            emoji = '🏭';
             isAmenity = true;
         } else if (amenity.includes('warehouse')) {
-            color = CONFIG.COLORS.warehouse;
-            radius = 5;
+            emoji = '📦';
             isAmenity = true;
         } else if (amenity.includes('office')) {
-            color = CONFIG.COLORS.office;
-            radius = 6;
+            emoji = '🏢';
             isAmenity = true;
         } else if (amenity.includes('community')) {
-            color = CONFIG.COLORS.community_center;
-            radius = 6;
+            emoji = '🏛️';
             isAmenity = true;
         }
         
         // Metro stations get special treatment
         if (amenity.includes('metro_station') || node.is_metro) {
-            color = CONFIG.COLORS.nodeMetro;
-            radius = Math.max(radius, 8);
+            emoji = '🚇';
             isAmenity = true;
         }
         
-        const circle = L.circleMarker(pos, {
-            radius: radius,
-            fillColor: color,
-            fillOpacity: isAmenity ? 0.9 : 0.5,
-            color: isAmenity ? '#fff' : color,
-            weight: isAmenity ? 2 : 1
-        });
+        let marker;
         
-        // Add tooltip for amenities
-        if (isAmenity) {
-            circle.bindTooltip(`${amenity.replace('_', ' ').toUpperCase()}`, {
+        if (emoji) {
+            // Use emoji marker for amenities
+            const emojiIcon = L.divIcon({
+                html: `<div class="emoji-marker">${emoji}</div>`,
+                className: 'emoji-icon',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            marker = L.marker(pos, { icon: emojiIcon });
+            
+            // Add tooltip for amenities
+            marker.bindTooltip(`${amenity.replace('_', ' ').toUpperCase()}`, {
                 permanent: false,
                 direction: 'top'
             });
+        } else {
+            // Use circle for regular nodes
+            marker = L.circleMarker(pos, {
+                radius: radius,
+                fillColor: color,
+                fillOpacity: 0.5,
+                color: color,
+                weight: 1
+            });
         }
         
-        circle.on('click', () => showNodeInfo(node));
+        marker.on('click', () => showNodeInfo(node));
         
         if (isAmenity) {
-            state.layers.amenities.addLayer(circle);
+            state.layers.amenities.addLayer(marker);
         }
-        state.layers.nodes.addLayer(circle);
+        state.layers.nodes.addLayer(marker);
     });
     
     // Add visible layers to map (amenities ON by default now)
