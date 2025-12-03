@@ -1,4 +1,4 @@
-// GNN City Simulator - Interactive App
+// GNN City Simulator - PUNE Interactive Map
 const API_BASE = 'http://localhost:5000';
 
 // State Management
@@ -6,179 +6,333 @@ const state = {
   map: null,
   currentScenario: null,
   scenarioResults: null,
+  selectedEdge: null,
   selectedNode: null,
   layers: {
     roads: null,
     metros: null,
-    amenities: null,
-    heatmap: null
+    amenities: null
   },
   cityData: null,
+  edgeMap: {},           // Map edge IDs to edge objects for quick lookup
+  nodeMap: {},           // Map node IDs to node objects
+  originalColors: {},    // Store original edge colors
   predictionsBefore: [],
-  predictionsAfter: []
+  predictionsAfter: [],
+  currentPredictions: []
 };
 
-// Initialize app
+// Initialize app on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('Initializing GNN City Simulator...');
+  console.log('🚀 Initializing Pune GNN City Simulator...');
   
-  // Initialize map
-  initializeMap();
-  
-  // Load city data
-  await loadCityData();
-  
-  // Setup event listeners
-  setupEventListeners();
-  
-  // Check backend health
-  checkBackendHealth();
+  try {
+    // 1. Load city data from backend or local file
+    console.log('📥 Attempting to load graph data...');
+    try {
+      // Try local JSON first (full geometry)
+      const localResponse = await fetch('../graph_full_data.json');
+      if (localResponse.ok) {
+        state.cityData = await localResponse.json();
+        console.log('✅ Loaded from local graph_full_data.json:', {
+          nodes: state.cityData.nodes?.length,
+          edges: state.cityData.edges?.length
+        });
+      } else {
+        throw new Error('Local file not available');
+      }
+    } catch (e) {
+      // Fallback to backend
+      try {
+        const backendResponse = await fetch(`${API_BASE}/city-data`);
+        if (backendResponse.ok) {
+          state.cityData = await backendResponse.json();
+          console.log('✅ Loaded from backend:', {
+            nodes: state.cityData.nodes?.length,
+            edges: state.cityData.edges?.length
+          });
+        } else {
+          throw new Error('Backend unavailable');
+        }
+      } catch (backendError) {
+        console.warn('⚠️ Could not load city data:', backendError.message);
+      }
+    }
+    
+    // Build data maps
+    if (state.cityData) {
+      (state.cityData.edges || []).forEach(edge => {
+        state.edgeMap[edge.id] = edge;
+        state.originalColors[edge.id] = getCongestionColor(edge.congestion);
+      });
+      (state.cityData.nodes || []).forEach(node => {
+        state.nodeMap[node.id] = node;
+      });
+      console.log('✅ Data maps built');
+    }
+    
+    // 2. Initialize map
+    initializeMap();
+    
+    // 3. Render all roads and POIs
+    renderRoadNetwork();
+    
+    // 4. Setup event listeners
+    setupEventListeners();
+    
+    // 5. Check backend health
+    checkBackendHealth();
+  } catch (error) {
+    console.error('❌ Initialization failed:', error);
+    alert('Error initializing application: ' + error.message);
+  }
 });
 
 /**
- * Initialize Leaflet Map
+ * Initialize Leaflet Map - Centered on Pune, India
  */
 function initializeMap() {
+  // Pune, India center coordinates
+  const puneCenter = [18.55, 73.85];
+  
   state.map = L.map('map', {
-    center: [40.7128, -74.0060], // NYC coordinates
+    center: puneCenter,
     zoom: 12,
     zoomControl: true,
     attributionControl: true,
-    darkMode: true
+    preferCanvas: true
   });
 
-  // Add tile layer (dark theme)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; CartoDB',
+  // Add OpenStreetMap layer (good for India)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
     maxZoom: 19,
     minZoom: 10
   }).addTo(state.map);
 
-  // Initialize feature layers
+  // Initialize feature groups
   state.layers.roads = L.featureGroup().addTo(state.map);
   state.layers.metros = L.featureGroup().addTo(state.map);
   state.layers.amenities = L.featureGroup().addTo(state.map);
 
-  console.log('Map initialized successfully');
+  console.log('✅ Leaflet map initialized for Pune');
 }
 
 /**
- * Load city data from backend
+ * Load Pune city data from backend
  */
-async function loadCityData() {
-  try {
-    const response = await fetch(`${API_BASE}/city-data`);
-    if (response.ok) {
-      state.cityData = await response.json();
-      renderCityLayers();
-      console.log('City data loaded:', state.cityData);
-    } else {
-      console.warn('City data endpoint not available, using mock data');
-      state.cityData = generateMockCityData();
-      renderCityLayers();
-    }
-  } catch (error) {
-    console.warn('Could not load city data from backend:', error);
-    state.cityData = generateMockCityData();
-    renderCityLayers();
+
+/**
+ * Render Pune road network with all roads interactive
+ */
+function renderRoadNetwork() {
+  if (!state.cityData) {
+    console.warn('No city data available');
+    return;
   }
-}
 
-/**
- * Render city layers on map
- */
-function renderCityLayers() {
-  if (!state.cityData) return;
-
-  // Clear existing layers
+  console.log('🗺️ Rendering road network...');
   state.layers.roads.clearLayers();
   state.layers.metros.clearLayers();
   state.layers.amenities.clearLayers();
 
-  const { nodes, edges, amenities } = state.cityData;
+  const { nodes, edges, metros, amenities } = state.cityData;
 
-  // Render roads
+  // Render all road edges
   if (edges && Array.isArray(edges)) {
+    let renderedCount = 0;
+    
     edges.forEach((edge, idx) => {
-      const source = nodes.find(n => n.id === edge.source);
-      const target = nodes.find(n => n.id === edge.target);
-      
-      if (source && target) {
+      try {
+        // Calculate congestion color and width
         const congestion = edge.congestion || 0;
         const color = getCongestionColor(congestion);
-        const weight = 2 + (congestion / 10);
-        
+        const weight = 1.5 + (congestion * 3);  // Road width based on congestion
+        const opacity = 0.7;
+
+        // Use full geometry coordinates if available, otherwise simple line
+        let coordinates = [];
+        if (edge.coordinates && Array.isArray(edge.coordinates)) {
+          // Full geometry: convert coordinate pairs to [lat, lon] for Leaflet
+          coordinates = edge.coordinates.map(c => [c[0], c[1]]);
+        } else {
+          // Fallback: simple line between source and target
+          const sourceNode = state.nodeMap[edge.source];
+          const targetNode = state.nodeMap[edge.target];
+          
+          if (!sourceNode || !targetNode) return;
+          coordinates = [
+            [sourceNode.lat, sourceNode.lon],
+            [targetNode.lat, targetNode.lon]
+          ];
+        }
+
+        // Create polyline for road with full geometry
         const polyline = L.polyline(
-          [[source.lat, source.lng], [target.lat, target.lng]],
+          coordinates,
           {
             color: color,
             weight: weight,
-            opacity: 0.7,
-            className: `road-segment road-${edge.id}`,
-            interactive: true
+            opacity: opacity,
+            className: `edge-${edge.id}`,
+            dashArray: edge.oneway ? '5,5' : 'none',  // Dashed lines for one-way roads
+            lineCap: 'round',
+            lineJoin: 'round'
           }
         );
+
+        // Add popup with road info
+        const roadInfo = `
+          <div style="font-size: 12px; font-weight: bold; color: #1e88e5;">🛣️ ${edge.name || 'Road Segment'}</div>
+          <hr style="margin: 4px 0; border: none; border-top: 1px solid #ddd;">
+          <small>
+            <div><strong>Type:</strong> ${edge.highway || 'unknown'}</div>
+            <div><strong>Length:</strong> ${(edge.length / 1000).toFixed(2)} km</div>
+            <div><strong>Congestion:</strong> <span style="color: ${color}"><strong>${(edge.congestion * 100).toFixed(1)}%</strong></span></div>
+            ${edge.oneway ? '<div><strong>⬆️ One-way road</strong></div>' : ''}
+            <div><strong>Edge ID:</strong> ${edge.id}</div>
+          </small>
+        `;
+        polyline.bindPopup(roadInfo);
+
+        // Add hover effects
+        polyline.on('mouseover', function() {
+          this.setStyle({ weight: weight * 1.5, opacity: 1.0 });
+        });
+        polyline.on('mouseout', function() {
+          this.setStyle({ weight: weight, opacity: opacity });
+        });
+
+        // Add click handler to select road
+        polyline.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);
+          selectRoad(edge.id);
+        });
+
+        // Add to map
+        polyline.addTo(state.layers.roads);
+        renderedCount++;
         
-        polyline.bindPopup(`
-          <div class="popup-content">
-            <strong>Road Segment ${edge.id}</strong><br>
-            Congestion: <span style="color:${color}">${(congestion * 100).toFixed(1)}%</span><br>
-            Flow: ${edge.flow || 'N/A'} vehicles/hour
+      } catch (error) {
+        // Silently skip problematic edges
+      }
+    });
+    
+    console.log(`✅ Rendered ${renderedCount} road segments`);
+  }
+
+  // Render metro stations
+  if (metros && Array.isArray(metros)) {
+    metros.forEach(metro => {
+      try {
+        const icon = L.icon({
+          iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0iI0ZGQzEwNyIgc3Ryb2tlPSIjRkY5ODAwIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIxNiIgeT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMzMzMzMzMiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE0Ij5N PC90ZXh0Pjwvc3ZnPg==',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -16]
+        });
+        
+        const marker = L.marker([metro.lat, metro.lon], { icon, title: metro.name });
+        marker.bindPopup(`
+          <div style="font-size: 12px;">
+            <strong>🚇 ${metro.name || 'Metro Station'}</strong><br>
+            Amenity Type: ${metro.amenity_type}
           </div>
         `);
         
-        polyline.on('click', () => selectNode(edge.id, 'road'));
-        state.layers.roads.addLayer(polyline);
+        state.layers.metros.addLayer(marker);
+      } catch (error) {
+        console.warn('Error rendering metro:', error);
       }
     });
+    
+    console.log(`✅ Rendered ${metros.length} metro stations`);
   }
 
-  // Render metros (if available)
-  if (state.cityData.metros && Array.isArray(state.cityData.metros)) {
-    state.cityData.metros.forEach(metro => {
-      const icon = L.icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0iIzFGMjEzNiIgc3Ryb2tlPSIjRkZDMTA3IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIxMiIgeT0iMTYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNGRkMxMDciIGZvbnQtc2l6ZT0iOCIgZm9udC13ZWlnaHQ9ImJvbGQiPk08L3RleHQ+PC9zdmc+',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12]
-      });
-      
-      const marker = L.marker([metro.lat, metro.lng], { icon });
-      marker.bindPopup(`
-        <div class="popup-content">
-          <strong>${metro.name}</strong><br>
-          Line: ${metro.line}<br>
-          Stations: ${metro.stations || 'N/A'}
-        </div>
-      `);
-      marker.on('click', () => selectNode(metro.id, 'metro'));
-      state.layers.metros.addLayer(marker);
-    });
-  }
-
-  // Render amenities
+  // Render amenities (hospitals, schools, etc.)
   if (amenities && Array.isArray(amenities)) {
     amenities.forEach(amenity => {
-      const icon = L.icon({
-        iconUrl: getAmenityIcon(amenity.type),
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -10]
-      });
-      
-      const marker = L.marker([amenity.lat, amenity.lng], { icon });
-      marker.bindPopup(`
-        <div class="popup-content">
-          <strong>${amenity.name}</strong><br>
-          Type: ${amenity.type}
-        </div>
-      `);
-      marker.on('click', () => selectNode(amenity.id, 'amenity'));
-      state.layers.amenities.addLayer(marker);
+      try {
+        const icon = L.icon({
+          iconUrl: getAmenityIcon(amenity.amenity_type),
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+          popupAnchor: [0, -12]
+        });
+        
+        const marker = L.marker([amenity.lat, amenity.lon], { icon, title: amenity.name });
+        marker.bindPopup(`
+          <div style="font-size: 12px;">
+            <strong>${amenity.name || 'POI'}</strong><br>
+            Type: ${amenity.amenity_type}
+          </div>
+        `);
+        
+        state.layers.amenities.addLayer(marker);
+      } catch (error) {
+        console.warn('Error rendering amenity:', error);
+      }
     });
+    
+    console.log(`✅ Rendered ${amenities.length} amenities`);
   }
 
-  console.log('City layers rendered');
+  // Fit map to bounds if we have nodes
+  if (nodes && nodes.length > 0) {
+    const bounds = L.latLngBounds(
+      nodes.map(n => [n.lat, n.lon])
+    );
+    state.map.fitBounds(bounds, { padding: [50, 50] });
+  }
+
+  console.log('🎉 Road network rendering complete!');
+}
+
+/**
+ * Calculate statistics from predictions
+ */
+function calculateStats(predictions) {
+  if (!predictions || predictions.length === 0) {
+    return { average: 0, max: 0, min: 0, total: 0 };
+  }
+
+  const sum = predictions.reduce((a, b) => a + b, 0);
+  return {
+    average: sum / predictions.length,
+    max: Math.max(...predictions),
+    min: Math.min(...predictions),
+    total: predictions.length
+  };
+}
+
+/**
+ * Reset scenario and restore original road colors
+ */
+function resetScenario() {
+  console.log('🔄 Resetting scenario...');
+  
+  // Clear state
+  state.selectedEdge = null;
+  state.predictionsBefore = [];
+  state.predictionsAfter = [];
+  state.scenarioResults = null;
+
+  // Restore original road colors
+  const edges = state.cityData?.edges || [];
+  edges.forEach((edge, idx) => {
+    const originalColor = getCongestionColor(edge.congestion);
+    const element = document.querySelector(`.edge-${edge.id}`);
+    if (element) {
+      element.setAttribute('stroke', originalColor);
+      element.setAttribute('stroke-width', 1.5 + (edge.congestion * 3));
+    }
+  });
+
+  // Clear UI
+  document.querySelector('.selection-info').innerHTML = '<p style="color: #999;">No road selected</p>';
+  document.querySelector('.quick-stats').innerHTML = '';
+
+  console.log('✅ Scenario reset');
 }
 
 /**
@@ -207,6 +361,27 @@ function getAmenityIcon(type) {
 }
 
 /**
+ * Select a road edge for analysis
+ */
+function selectRoad(edgeId) {
+  state.selectedEdge = edgeId;
+  const edge = state.edgeMap[edgeId];
+  
+  if (edge) {
+    const infoPanel = document.querySelector('.selection-info');
+    infoPanel.innerHTML = `
+      <div style="text-align: left;">
+        <strong style="color: #1e88e5;">🛣️ Road Selected</strong><br>
+        <small>Edge ID: ${edgeId}</small><br>
+        <small>Length: ${edge.length?.toFixed(1) || 'N/A'} m</small><br>
+        <small>Current Congestion: <strong style="color: ${getCongestionColor(edge.congestion)}">${(edge.congestion * 100).toFixed(1)}%</strong></small>
+      </div>
+    `;
+    console.log('Selected road:', edge);
+  }
+}
+
+/**
  * Select node and update panel
  */
 function selectNode(nodeId, type) {
@@ -224,11 +399,11 @@ function updateSelectionInfo() {
       <div>
         <strong>${state.selectedNode.type.toUpperCase()}</strong><br>
         ID: ${state.selectedNode.id}<br>
-        <small class="text-muted">Click on map to select different locations</small>
+        <small class="text-muted">Click roads for detailed analysis</small>
       </div>
     `;
   } else {
-    infoPanel.innerHTML = '<small class="text-muted">Select a node on the map to view details</small>';
+    infoPanel.innerHTML = '<small class="text-muted">Click roads/amenities on map</small>';
   }
 }
 
@@ -262,20 +437,26 @@ function setupEventListeners() {
 }
 
 /**
- * Run scenario
+ * Run scenario on Pune road network
  */
 async function runScenario() {
   const scenarioType = document.getElementById('scenarioType').value;
   const severity = parseFloat(document.getElementById('severity').value);
   const duration = parseInt(document.getElementById('duration').value);
 
-  console.log('Running scenario:', { scenarioType, severity, duration });
+  console.log('🚀 Running scenario:', { scenarioType, severity, duration });
 
-  // Collect prediction features from map
-  const features = collectMapFeatures();
+  // Collect current road congestions as features
+  const features = state.cityData.edges?.map(e => e.congestion) || [];
   
+  if (features.length === 0) {
+    alert('No road data available');
+    return;
+  }
+
   try {
     // Get baseline prediction
+    console.log('📊 Getting baseline predictions...');
     const beforeResponse = await fetch(`${API_BASE}/predict`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -283,10 +464,11 @@ async function runScenario() {
     });
 
     if (!beforeResponse.ok) throw new Error('Prediction failed');
-    
-    state.predictionsBefore = await beforeResponse.json();
+    const beforeData = await beforeResponse.json();
+    state.predictionsBefore = beforeData.predictions || [];
 
     // Run what-if scenario
+    console.log('🔄 Running what-if analysis...');
     const whatifResponse = await fetch(`${API_BASE}/whatif`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -294,96 +476,82 @@ async function runScenario() {
         features,
         scenario: {
           type: scenarioType,
-          severity: severity,
+          severity: severity / 10,  // Convert 1-10 to 0-1
           duration: duration
         }
       })
     });
 
     if (!whatifResponse.ok) throw new Error('What-if analysis failed');
-
     const result = await whatifResponse.json();
     state.scenarioResults = result;
-    state.predictionsAfter = result.after || [];
+    state.predictionsAfter = result.after || result.predictions || [];
 
     // Update map visualization
-    updateMapVisualization();
+    updateMapWithPredictions();
     
-    // Show quick stats
-    updateQuickStats(result);
+    // Update quick stats
+    updateQuickStats();
     
-    console.log('Scenario completed:', result);
+    console.log('✅ Scenario completed!');
+    
   } catch (error) {
-    console.error('Error running scenario:', error);
-    alert('Error running scenario: ' + error.message);
+    console.error('❌ Error running scenario:', error);
+    alert('Error: ' + error.message);
   }
 }
 
 /**
- * Collect features from current map state
+ * Update map roads with new predictions
  */
-function collectMapFeatures() {
-  // Collect congestion values from all road segments
-  const features = [];
-  
-  if (state.cityData && state.cityData.edges) {
-    state.cityData.edges.forEach(edge => {
-      features.push(edge.congestion || Math.random() * 0.5);
-    });
+function updateMapWithPredictions() {
+  if (!state.predictionsAfter || state.predictionsAfter.length === 0) {
+    console.warn('No predictions to display');
+    return;
   }
+
+  const edges = state.cityData?.edges || [];
   
-  // Ensure we have at least some features
-  if (features.length === 0) {
-    features.push(...[0.3, 0.4, 0.2, 0.5, 0.1]);
-  }
-  
-  return features;
-}
-
-/**
- * Update map visualization after scenario
- */
-function updateMapVisualization() {
-  if (!state.cityData || !state.scenarioResults) return;
-
-  const { edges } = state.cityData;
-  const predictions = state.predictionsAfter;
-
-  // Update each road segment with new congestion value
+  // Update each road segment's color
   edges.forEach((edge, idx) => {
-    const newCongestion = predictions[idx] !== undefined ? predictions[idx] : edge.congestion;
-    const color = getCongestionColor(newCongestion);
-    
-    // Update road segment visual
-    const roadSegment = document.querySelector(`.road-${edge.id}`);
-    if (roadSegment) {
-      roadSegment.setAttribute('stroke', color);
+    if (idx < state.predictionsAfter.length) {
+      const newCongestion = state.predictionsAfter[idx];
+      const newColor = getCongestionColor(newCongestion);
+      const newWeight = 1.5 + (newCongestion * 3);
+      
+      // Find and update the polyline in the DOM
+      const element = document.querySelector(`.edge-${edge.id}`);
+      if (element) {
+        element.setAttribute('stroke', newColor);
+        element.setAttribute('stroke-width', newWeight);
+      }
     }
   });
 
-  console.log('Map visualization updated');
+  console.log('✅ Map visualization updated with predictions');
 }
 
 /**
- * Update quick stats
+ * Update quick stats panel
  */
-function updateQuickStats(result) {
-  const statsBefore = calculateStats(state.predictionsBefore);
-  const statsAfter = calculateStats(state.predictionsAfter);
+function updateQuickStats() {
+  const before = calculateStats(state.predictionsBefore);
+  const after = calculateStats(state.predictionsAfter);
+  const changePercent = ((after.average - before.average) / before.average * 100).toFixed(1);
 
   const html = `
     <div class="stat-item">
       <span class="stat-label">Avg Congestion Before</span>
-      <span class="stat-value">${(statsBefore.average * 100).toFixed(1)}%</span>
+      <span class="stat-value">${(before.average * 100).toFixed(1)}%</span>
     </div>
     <div class="stat-item">
       <span class="stat-label">Avg Congestion After</span>
-      <span class="stat-value">${(statsAfter.average * 100).toFixed(1)}%</span>
+      <span class="stat-value">${(after.average * 100).toFixed(1)}%</span>
     </div>
     <div class="stat-item">
-      <span class="stat-label">Congestion Change</span>
-      <span class="stat-value" style="color: ${statsAfter.average > statsBefore.average ? '#FF5722' : '#4CAF50'}">
-        ${((statsAfter.average - statsBefore.average) * 100).toFixed(1)}%
+      <span class="stat-label">Change</span>
+      <span class="stat-value" style="color: ${changePercent > 0 ? '#FF5722' : '#4CAF50'}">
+        ${changePercent > 0 ? '+' : ''}${changePercent}%
       </span>
     </div>
   `;
