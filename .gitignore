@@ -99,6 +99,5 @@ gnn_training_data.pkl
 .venv/
 __pycache__/
 *.graphml
-*.pkl
 *.csv
 *.png
