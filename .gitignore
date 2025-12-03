@@ -97,3 +97,5 @@ ehthumbs.db
 # End of .gitignore
 # pkl
 gnn_training_data.pkl
+
+.streamlit
