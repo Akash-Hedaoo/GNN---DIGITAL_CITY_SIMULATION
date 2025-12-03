@@ -31,6 +31,8 @@ const CONFIG = {
         highCongestion: '#e74c3c',  // Red for high congestion
         lowCongestion: '#2ecc71',   // Green for low congestion
         closed: '#ff69b4',          // Pink for blocked roads,
+        route: '#00ff88',           // Bright green for route
+        routeGlow: '#00ffaa',       // Route glow color
         // Node colors
         node: '#95a5a6',
         nodeMetro: '#9b59b6',
@@ -43,6 +45,33 @@ const CONFIG = {
         warehouse: '#607d8b',
         office: '#3498db',
         community_center: '#9c27b0'
+    },
+    // Time-based congestion multipliers
+    TIME_MULTIPLIERS: {
+        0: 0.3,   // 12 AM - very low
+        1: 0.2,   // 1 AM
+        2: 0.2,   // 2 AM
+        3: 0.2,   // 3 AM
+        4: 0.3,   // 4 AM
+        5: 0.5,   // 5 AM - early risers
+        6: 0.7,   // 6 AM
+        7: 0.9,   // 7 AM - morning rush starts
+        8: 1.3,   // 8 AM - peak morning
+        9: 1.5,   // 9 AM - peak morning
+        10: 1.1,  // 10 AM
+        11: 1.0,  // 11 AM
+        12: 1.1,  // 12 PM - lunch
+        13: 1.0,  // 1 PM
+        14: 0.9,  // 2 PM
+        15: 0.9,  // 3 PM
+        16: 1.0,  // 4 PM
+        17: 1.3,  // 5 PM - evening rush starts
+        18: 1.5,  // 6 PM - peak evening
+        19: 1.4,  // 7 PM
+        20: 1.0,  // 8 PM
+        21: 0.8,  // 9 PM
+        22: 0.6,  // 10 PM
+        23: 0.4   // 11 PM
     }
 };
 
@@ -60,14 +89,27 @@ const state = {
         roads: null,
         metro: null,
         nodes: null,
-        amenities: null
+        amenities: null,
+        route: null  // NEW: Route layer
     },
     visible: {
         roads: true,
         metro: true,
         nodes: true,
         amenities: true
-    }
+    },
+    // NEW: Theme state
+    theme: 'dark',
+    tileLayer: null,
+    // NEW: Current simulated hour
+    currentHour: 8,
+    // NEW: Route state
+    currentRoute: null,
+    routeMarkers: [],
+    // NEW: Node map for quick lookup
+    nodeMap: {},
+    // NEW: Transform function reference
+    transform: null
 };
 
 // ============================================================
@@ -95,6 +137,11 @@ async function init() {
 }
 
 function initMap() {
+    // Load saved theme
+    const savedTheme = localStorage.getItem('citySimTheme') || 'dark';
+    state.theme = savedTheme;
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
     if (CONFIG.USE_REAL_MAP) {
         // Real map with OpenStreetMap tiles
         state.map = L.map('map', {
@@ -106,12 +153,8 @@ function initMap() {
             wheelPxPerZoomLevel: 120 // More pixels needed to zoom (slower scroll zoom)
         });
 
-        // Add OpenStreetMap tile layer (dark theme)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(state.map);
+        // Add tile layer based on theme
+        updateMapTiles();
     } else {
         // Abstract view with simple coordinates
         state.map = L.map('map', {
@@ -127,6 +170,29 @@ function initMap() {
 
     // Add zoom control to top-right
     state.map.zoomControl.setPosition('topright');
+}
+
+// NEW: Update map tiles based on theme
+function updateMapTiles() {
+    if (state.tileLayer) {
+        state.map.removeLayer(state.tileLayer);
+    }
+    
+    if (state.theme === 'dark') {
+        state.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        });
+    } else {
+        state.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        });
+    }
+    
+    state.tileLayer.addTo(state.map);
 }
 
 function setupEventListeners() {
@@ -163,6 +229,380 @@ function setupEventListeners() {
     
     // Analysis button
     document.getElementById('btn-analysis').addEventListener('click', goToAnalysis);
+    
+    // NEW: Theme toggle
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // NEW: Search functionality
+    setupSearchListeners();
+    
+    // NEW: Route planner
+    document.getElementById('btn-find-route').addEventListener('click', findRoute);
+    document.getElementById('btn-clear-route').addEventListener('click', clearRoute);
+    
+    // NEW: Time slider
+    setupTimeSlider();
+}
+
+// NEW: Toggle between dark and light theme
+function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', state.theme);
+    localStorage.setItem('citySimTheme', state.theme);
+    
+    if (CONFIG.USE_REAL_MAP) {
+        updateMapTiles();
+    }
+    
+    showToast(`Switched to ${state.theme} theme`, 'info');
+}
+
+// NEW: Setup search listeners
+function setupSearchListeners() {
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+    
+    let searchTimeout = null;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim().toLowerCase();
+        
+        if (query.length < 2) {
+            searchResults.classList.remove('active');
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => performSearch(query), 300);
+    });
+    
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim().length >= 2) {
+            searchResults.classList.add('active');
+        }
+    });
+    
+    // Close search results when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-container')) {
+            searchResults.classList.remove('active');
+        }
+    });
+}
+
+// NEW: Perform search
+function performSearch(query) {
+    if (!state.graphData) return;
+    
+    const results = [];
+    const { nodes } = state.graphData;
+    
+    // Search through nodes
+    nodes.forEach(node => {
+        const amenity = (node.amenity || '').toLowerCase();
+        const zone = (node.zone || '').toLowerCase();
+        const nodeId = String(node.id).toLowerCase();
+        
+        let match = false;
+        let priority = 0;
+        
+        // Match by ID
+        if (nodeId.includes(query)) {
+            match = true;
+            priority = nodeId === query ? 3 : 1;
+        }
+        
+        // Match by amenity
+        if (amenity.includes(query)) {
+            match = true;
+            priority = 2;
+        }
+        
+        // Match by zone
+        if (zone.includes(query)) {
+            match = true;
+            priority = 1;
+        }
+        
+        if (match) {
+            results.push({ ...node, priority });
+        }
+    });
+    
+    // Sort by priority and limit results
+    results.sort((a, b) => b.priority - a.priority);
+    const topResults = results.slice(0, 10);
+    
+    // Display results
+    displaySearchResults(topResults);
+}
+
+// NEW: Display search results
+function displaySearchResults(results) {
+    const container = document.getElementById('search-results');
+    
+    if (results.length === 0) {
+        container.innerHTML = '<div class="search-result-item"><span class="result-text">No results found</span></div>';
+        container.classList.add('active');
+        return;
+    }
+    
+    container.innerHTML = results.map(node => {
+        const emoji = getAmenityEmoji(node.amenity);
+        const amenityText = node.amenity ? node.amenity.replace('_', ' ') : 'Node';
+        
+        return `
+            <div class="search-result-item" data-node-id="${node.id}">
+                <span class="result-icon">${emoji}</span>
+                <div class="result-text">
+                    <div class="result-name">Node ${node.id}</div>
+                    <div class="result-details">${amenityText} • ${node.zone} • Pop: ${node.population}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers
+    container.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const nodeId = item.dataset.nodeId;
+            focusOnNode(nodeId);
+            container.classList.remove('active');
+            document.getElementById('search-input').value = '';
+        });
+    });
+    
+    container.classList.add('active');
+}
+
+// NEW: Get emoji for amenity type
+function getAmenityEmoji(amenity) {
+    if (!amenity) return '📍';
+    const a = amenity.toLowerCase();
+    if (a.includes('hospital')) return '🏥';
+    if (a.includes('park')) return '🌳';
+    if (a.includes('school')) return '🏫';
+    if (a.includes('mall')) return '🛒';
+    if (a.includes('factory')) return '🏭';
+    if (a.includes('warehouse')) return '📦';
+    if (a.includes('office')) return '🏢';
+    if (a.includes('metro')) return '🚇';
+    if (a.includes('community')) return '🏛️';
+    return '📍';
+}
+
+// NEW: Focus map on a specific node
+function focusOnNode(nodeId) {
+    const node = state.nodeMap[nodeId];
+    if (!node || !state.transform) return;
+    
+    const pos = state.transform(node.x, node.y);
+    state.map.setView(pos, 16, { animate: true });
+    
+    // Show a temporary marker
+    const pulseIcon = L.divIcon({
+        html: '<div class="pulse-marker"></div>',
+        className: 'pulse-icon',
+        iconSize: [30, 30]
+    });
+    
+    const marker = L.marker(pos, { icon: pulseIcon }).addTo(state.map);
+    setTimeout(() => state.map.removeLayer(marker), 3000);
+    
+    // Show node info
+    showNodeInfo(node);
+    showToast(`Found: Node ${nodeId}`, 'success');
+}
+
+// NEW: Setup time slider
+function setupTimeSlider() {
+    const slider = document.getElementById('time-slider');
+    const timeDisplay = document.getElementById('current-time');
+    const periodDisplay = document.getElementById('time-period');
+    
+    slider.addEventListener('input', (e) => {
+        const hour = parseInt(e.target.value);
+        state.currentHour = hour;
+        updateTimeDisplay(hour);
+    });
+    
+    // Quick time buttons
+    document.querySelectorAll('.time-quick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const hour = parseInt(btn.dataset.hour);
+            slider.value = hour;
+            state.currentHour = hour;
+            updateTimeDisplay(hour);
+            
+            // Update button states
+            document.querySelectorAll('.time-quick-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Auto-run prediction with new time
+            if (state.graphData) {
+                runPrediction();
+            }
+        });
+    });
+}
+
+// NEW: Update time display
+function updateTimeDisplay(hour) {
+    const timeDisplay = document.getElementById('current-time');
+    const periodDisplay = document.getElementById('time-period');
+    
+    // Format time
+    const displayHour = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    const ampm = hour < 12 ? 'AM' : 'PM';
+    timeDisplay.textContent = `${String(displayHour).padStart(2, '0')}:00 ${ampm}`;
+    
+    // Determine period
+    let period, periodClass;
+    if (hour >= 6 && hour < 10) {
+        period = '🌅 Morning Rush';
+        periodClass = 'rush';
+    } else if (hour >= 10 && hour < 16) {
+        period = '☀️ Daytime';
+        periodClass = 'morning';
+    } else if (hour >= 16 && hour < 20) {
+        period = '🌆 Evening Rush';
+        periodClass = 'rush';
+    } else if (hour >= 20 || hour < 6) {
+        period = '🌙 Night';
+        periodClass = 'night';
+    }
+    
+    periodDisplay.textContent = period;
+    periodDisplay.className = `time-period ${periodClass}`;
+}
+
+// NEW: Find route between two nodes
+async function findRoute() {
+    const sourceInput = document.getElementById('route-source').value.trim();
+    const targetInput = document.getElementById('route-target').value.trim();
+    
+    if (!sourceInput || !targetInput) {
+        showToast('Please enter both source and destination nodes', 'error');
+        return;
+    }
+    
+    showLoading('Finding route...');
+    
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/shortest-path`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: sourceInput, target: targetInput })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Store and display route
+        state.currentRoute = data;
+        displayRoute(data);
+        
+        showToast(`Route found: ${data.hops} hops`, 'success');
+    } catch (error) {
+        console.error('Route finding failed:', error);
+        showToast('Route not found: ' + error.message, 'error');
+    }
+    
+    hideLoading();
+}
+
+// NEW: Display route on map
+function displayRoute(routeData) {
+    // Clear previous route
+    clearRouteLayer();
+    
+    if (!routeData.path || routeData.path.length < 2) return;
+    
+    const { path, length, hops } = routeData;
+    
+    // Create route layer
+    state.layers.route = L.layerGroup();
+    
+    // Build path coordinates
+    const pathCoords = [];
+    path.forEach(nodeId => {
+        const node = state.nodeMap[nodeId];
+        if (node && state.transform) {
+            pathCoords.push(state.transform(node.x, node.y));
+        }
+    });
+    
+    // Draw route line (with glow effect)
+    const glowLine = L.polyline(pathCoords, {
+        color: CONFIG.COLORS.routeGlow,
+        weight: 10,
+        opacity: 0.3
+    });
+    
+    const routeLine = L.polyline(pathCoords, {
+        color: CONFIG.COLORS.route,
+        weight: 5,
+        opacity: 0.9,
+        dashArray: '10, 5'
+    });
+    
+    state.layers.route.addLayer(glowLine);
+    state.layers.route.addLayer(routeLine);
+    
+    // Add start marker
+    const startIcon = L.divIcon({
+        html: '<div class="route-marker start">🟢</div>',
+        className: 'route-marker-icon',
+        iconSize: [30, 30]
+    });
+    const startMarker = L.marker(pathCoords[0], { icon: startIcon });
+    state.layers.route.addLayer(startMarker);
+    state.routeMarkers.push(startMarker);
+    
+    // Add end marker
+    const endIcon = L.divIcon({
+        html: '<div class="route-marker end">🔴</div>',
+        className: 'route-marker-icon',
+        iconSize: [30, 30]
+    });
+    const endMarker = L.marker(pathCoords[pathCoords.length - 1], { icon: endIcon });
+    state.layers.route.addLayer(endMarker);
+    state.routeMarkers.push(endMarker);
+    
+    // Add to map
+    state.layers.route.addTo(state.map);
+    
+    // Fit bounds to show entire route
+    state.map.fitBounds(L.latLngBounds(pathCoords), { padding: [50, 50] });
+    
+    // Update route info panel
+    const routeInfo = document.getElementById('route-info');
+    document.getElementById('route-distance').textContent = `${length.toFixed(2)} units`;
+    document.getElementById('route-time').textContent = `${(length * 2).toFixed(1)} min`;
+    document.getElementById('route-hops').textContent = `${hops} nodes`;
+    routeInfo.classList.add('active');
+}
+
+// NEW: Clear route layer
+function clearRouteLayer() {
+    if (state.layers.route) {
+        state.map.removeLayer(state.layers.route);
+        state.layers.route = null;
+    }
+    state.routeMarkers = [];
+    state.currentRoute = null;
+}
+
+// NEW: Clear route (button handler)
+function clearRoute() {
+    clearRouteLayer();
+    document.getElementById('route-source').value = '';
+    document.getElementById('route-target').value = '';
+    document.getElementById('route-info').classList.remove('active');
+    showToast('Route cleared', 'info');
 }
 
 // Navigate to analysis page with current state
@@ -239,7 +679,7 @@ async function runPrediction() {
         const baselineResponse = await fetch(`${CONFIG.API_BASE}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ closed_roads: [] })
+            body: JSON.stringify({ closed_roads: [], hour: state.currentHour })
         });
         state.baselinePredictions = await baselineResponse.json();
         
@@ -248,7 +688,8 @@ async function runPrediction() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                closed_roads: Array.from(state.closedRoads)
+                closed_roads: Array.from(state.closedRoads),
+                hour: state.currentHour
             })
         });
         
@@ -258,19 +699,33 @@ async function runPrediction() {
             throw new Error(data.error);
         }
         
+        // Apply time-based multiplier to predictions (client-side for visualization)
+        const timeMultiplier = CONFIG.TIME_MULTIPLIERS[state.currentHour] || 1.0;
+        data.predictions.forEach(p => {
+            p.congestion = p.congestion * timeMultiplier;
+        });
+        data.stats.mean_congestion *= timeMultiplier;
+        data.stats.max_congestion *= timeMultiplier;
+        data.stats.road_mean *= timeMultiplier;
+        data.stats.metro_mean *= timeMultiplier;
+        
         state.predictions = data;
         
         // Update visualization
         updatePredictionVisualization();
         updateStatsUI(data.stats);
         
-        // Show result message
+        // Show result message with time info
+        const hour = state.currentHour;
+        const timeStr = `${hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour)}${hour < 12 ? 'AM' : 'PM'}`;
+        
         if (state.closedRoads.size > 0) {
             console.log('=== PREDICTION WITH ROAD CLOSURES ===');
             console.log(`Closed roads: ${Array.from(state.closedRoads).join(', ')}`);
-            showToast(`Prediction done! Showing traffic impact of ${state.closedRoads.size} blocked road(s)`, 'success');
+            console.log(`Time: ${timeStr}, Multiplier: ${timeMultiplier}x`);
+            showToast(`Prediction at ${timeStr}: Impact of ${state.closedRoads.size} blocked road(s)`, 'success');
         } else {
-            showToast('Prediction done! Showing current traffic levels', 'success');
+            showToast(`Prediction at ${timeStr}: Current traffic levels`, 'success');
         }
     } catch (error) {
         console.error('Prediction failed:', error);
@@ -293,9 +748,10 @@ function renderGraph() {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     
-    const nodeMap = {};
+    // Build node map for quick lookups (NEW)
+    state.nodeMap = {};
     nodes.forEach(node => {
-        nodeMap[node.id] = node;
+        state.nodeMap[node.id] = node;
         minX = Math.min(minX, node.x);
         maxX = Math.max(maxX, node.x);
         minY = Math.min(minY, node.y);
@@ -308,21 +764,22 @@ function renderGraph() {
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
     
-    // Transform function: maps graph coords to real-world lat/lng
-    let transform;
+    // Transform function: maps graph coords to real-world lat/lng (store in state)
     if (CONFIG.USE_REAL_MAP) {
         // Map to real Pune coordinates
         // Scale to cover roughly 5km x 5km area (0.045 degrees ~ 5km)
         const scaleFactor = 0.045 / Math.max(rangeX, rangeY);
-        transform = (x, y) => [
+        state.transform = (x, y) => [
             CONFIG.MAP_CENTER[0] + (y - centerY) * scaleFactor,
             CONFIG.MAP_CENTER[1] + (x - centerX) * scaleFactor
         ];
     } else {
         // Simple scaling for abstract view
         const scale = 10;
-        transform = (x, y) => [y * scale, x * scale];
+        state.transform = (x, y) => [y * scale, x * scale];
     }
+    
+    const transform = state.transform;
     
     // Clear existing layers
     Object.values(state.layers).forEach(layer => {
@@ -337,8 +794,8 @@ function renderGraph() {
     
     // Render edges
     edges.forEach(edge => {
-        const source = nodeMap[edge.source];
-        const target = nodeMap[edge.target];
+        const source = state.nodeMap[edge.source];
+        const target = state.nodeMap[edge.target];
         
         if (!source || !target) return;
         

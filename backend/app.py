@@ -223,6 +223,7 @@ def predict_traffic():
     try:
         data = request.json or {}
         closed_roads = data.get('closed_roads', [])
+        hour = data.get('hour', 8)  # Default to 8 AM
         
         # Build node features and edge features
         node_to_idx = {n: i for i, n in enumerate(graph.nodes())}
@@ -338,6 +339,37 @@ def get_amenities():
             })
     
     return jsonify({'amenities': amenities})
+
+
+@app.route('/api/search')
+def search_nodes():
+    """Search for nodes by query"""
+    if not graph_loaded:
+        return jsonify({'error': 'Graph not loaded'}), 500
+    
+    query = request.args.get('q', '').lower().strip()
+    if len(query) < 2:
+        return jsonify({'results': []})
+    
+    results = []
+    for node_id, data in graph.nodes(data=True):
+        amenity = str(data.get('amenity', '')).lower()
+        zone = str(data.get('zone', '')).lower()
+        node_id_str = str(node_id).lower()
+        
+        # Check for matches
+        if query in node_id_str or query in amenity or query in zone:
+            results.append({
+                'id': node_id,
+                'x': float(data.get('x', 0)),
+                'y': float(data.get('y', 0)),
+                'zone': data.get('zone', 'unknown'),
+                'population': int(float(data.get('population', 0))),
+                'amenity': data.get('amenity', 'none')
+            })
+    
+    # Limit results
+    return jsonify({'results': results[:20]})
 
 
 @app.route('/api/shortest-path', methods=['POST'])

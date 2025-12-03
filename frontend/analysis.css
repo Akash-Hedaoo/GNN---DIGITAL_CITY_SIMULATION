@@ -2,6 +2,7 @@
    Traffic Analysis Page Styles
    ============================================ */
 
+/* Dark Theme (Default) */
 :root {
     --bg-dark: #0a0e14;
     --bg-card: #1a1f2e;
@@ -21,6 +22,54 @@
     --color-red: #e74c3c;
     --color-green: #27ae60;
     --color-gray: #7f8c8d;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --bg-dark: #f5f7fa;
+    --bg-card: #ffffff;
+    --bg-hover: #e8ecf1;
+    --text-primary: #2c3e50;
+    --text-secondary: #5a6c7d;
+    --border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
+.theme-toggle:hover {
+    background: #f39c12;
+    color: white;
+    transform: scale(1.05);
+}
+
+.theme-toggle .fa-sun {
+    display: none;
+}
+
+.theme-toggle .fa-moon {
+    display: block;
+}
+
+[data-theme="light"] .theme-toggle .fa-sun {
+    display: block;
+}
+
+[data-theme="light"] .theme-toggle .fa-moon {
+    display: none;
 }
 
 * {
@@ -60,6 +109,10 @@ body {
 .header-left h1 {
     font-size: 1.4rem;
     font-weight: 600;
+    background: linear-gradient(135deg, #3498db, #00bcd4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .btn-back {
@@ -67,18 +120,24 @@ body {
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: transparent;
+    background: var(--bg-hover);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
     text-decoration: none;
     font-size: 0.9rem;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
 }
 
 .btn-back:hover {
-    background: var(--bg-hover);
+    background: #3498db;
     border-color: #3498db;
+    color: white;
+    transform: translateX(-3px);
+}
+
+.btn-back:active {
+    transform: translateX(0);
 }
 
 /* Main Content */
@@ -186,6 +245,12 @@ body {
     padding: 1.5rem;
     text-align: center;
     border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.impact-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 .impact-card.red {
@@ -215,6 +280,16 @@ body {
     font-size: 2.5rem;
     font-weight: 700;
     margin-bottom: 0.3rem;
+    transition: all 0.3s ease;
+}
+
+.impact-value.counting {
+    animation: countPulse 0.5s ease;
+}
+
+@keyframes countPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
 }
 
 .impact-card.red .impact-value { color: var(--color-red); }
@@ -411,6 +486,25 @@ body {
     gap: 8px;
     max-height: 300px;
     overflow-y: auto;
+    padding-right: 5px;
+}
+
+.road-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.road-list::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+    border-radius: 3px;
+}
+
+.road-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.road-list::-webkit-scrollbar-thumb:hover {
+    background: #3498db;
 }
 
 .road-item {
@@ -420,6 +514,14 @@ body {
     padding: 10px 12px;
     background: var(--bg-dark);
     border-radius: 6px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.road-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    transform: translateX(5px);
 }
 
 .road-id {
@@ -455,6 +557,10 @@ body {
     z-index: 1000;
 }
 
+[data-theme="light"] .loading-overlay {
+    background: rgba(245, 247, 250, 0.95);
+}
+
 .loading-overlay.hidden {
     display: none;
 }
@@ -470,6 +576,102 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Light Theme Specific Overrides */
+[data-theme="light"] .impact-card {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .impact-card.red {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.08), transparent);
+}
+
+[data-theme="light"] .impact-card.green {
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.08), transparent);
+}
+
+[data-theme="light"] .impact-card.gray {
+    background: linear-gradient(135deg, rgba(127, 140, 141, 0.08), transparent);
+}
+
+[data-theme="light"] .blocked-panel {
+    box-shadow: 0 2px 15px rgba(255, 105, 180, 0.1);
+}
+
+[data-theme="light"] .toast {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .header {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth Transitions for Theme Switch */
+body,
+.header,
+.blocked-panel,
+.impact-card,
+.chart-panel,
+.top-roads-panel,
+.road-item {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Responsive Improvements */
+@media (max-width: 1024px) {
+    .impact-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .congestion-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .affected-section {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .header-right {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .impact-value {
+        font-size: 2rem;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .header, .btn-analyze, .btn-back, .theme-toggle {
+        display: none !important;
+    }
+    
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .impact-card, .congestion-section, .comparison-section, .affected-panel {
+        break-inside: avoid;
+    }
 }
 
 #loading-text {

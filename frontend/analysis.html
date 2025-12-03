@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="analysis.css">
+    <script>
+        // Apply saved theme immediately before page renders
+        (function() {
+            const savedTheme = localStorage.getItem('citySimTheme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -16,6 +23,11 @@
             <h1>Traffic Impact Analysis</h1>
         </div>
         <div class="header-right">
+            <!-- Theme Toggle -->
+            <button class="theme-toggle" id="theme-toggle" title="Toggle Dark/Light Theme">
+                <i class="fas fa-moon"></i>
+                <i class="fas fa-sun"></i>
+            </button>
             <a href="index.html" class="btn btn-back">
                 <i class="fas fa-arrow-left"></i> Back to Map
             </a>
