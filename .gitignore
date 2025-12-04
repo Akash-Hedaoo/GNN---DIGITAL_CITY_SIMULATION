@@ -32,12 +32,15 @@ ENV/
 env.bak/
 venv.bak/
 twin-city-env/
+.venv/
 
-# PyTorch & ML models
+# PyTorch & ML - Training data and intermediate files
 *.pth
 *.pickle
+*.pkl
 *.h5
 *.onnx
+gnn_training_data.pkl
 
 # IDE
 .vscode/
@@ -78,19 +81,25 @@ logs/
 temp/
 tmp/
 
-# Frontend build output
-frontend/dist/
-frontend/build/
-
 # Streamlit cache
 .streamlit/
 .cache/
 
-# Generated files
-*.html
+# OSMnx cache directory (can be regenerated)
+cache/
 
-gnn_training_data.pkl
-.png
-.venv/
-__pycache__/
+# Generated/Intermediate files (can be regenerated)
+real_city_raw.graphml
+real_city_preview.png
+final_traffic_heatmap.png
 
+# Keep these files (REQUIRED for running the app):
+# - app.py
+# - step*.py (all pipeline scripts)
+# - real_city_processed.graphml (required by app.py)
+# - real_city_gnn.pt (required by app.py)
+# - real_city_amenities.csv (may be needed)
+# - requirements.txt
+# - templates/*.html (required for Flask)
+# - static/**/* (required for Flask)
+# - All documentation files

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Results - GNN Traffic Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Simulation Results</h1>
+            <a href="/" class="btn btn-secondary">← Back to Map</a>
+        </header>
+
+        <div class="results-container">
+            <div class="metrics-panel">
+                <h2>Impact Metrics</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Net Traffic Change</div>
+                        <div class="metric-value" id="netChange">--</div>
+                        <div class="metric-unit">%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Impacted Segments</div>
+                        <div class="metric-value" id="impactedSegments">--</div>
+                        <div class="metric-unit">roads</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Peak Bottleneck</div>
+                        <div class="metric-value" id="peakBottleneck">--</div>
+                        <div class="metric-unit">congestion factor</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Average Congestion</div>
+                        <div class="metric-value" id="avgCongestion">--</div>
+                        <div class="metric-unit">factor</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="impact-list">
+                <h2>Most Impacted Road Segments</h2>
+                <div id="impactList" class="impact-items">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <div class="visualization-panel">
+                <h2>Traffic Impact Visualization</h2>
+                <canvas id="impactChart" width="800" height="400"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/results.js') }}"></script>
+</body>
+</html>
+

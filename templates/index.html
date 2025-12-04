@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNN Traffic Simulation - Interactive Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚦 GNN Traffic Simulation - Digital City Twin</h1>
+            <p>Select roads to block and analyze traffic impact</p>
+        </header>
+
+        <div class="controls-panel">
+            <div class="control-group">
+                <button id="clearSelection" class="btn btn-secondary">Clear Selection</button>
+                <button id="runSimulation" class="btn btn-primary">Run Simulation</button>
+                <span id="selectedCount" class="badge">0 roads selected</span>
+            </div>
+            <div class="info-panel">
+                <div class="info-item">
+                    <label>Mode:</label>
+                    <select id="viewMode">
+                        <option value="baseline">Baseline Traffic</option>
+                        <option value="selection">Selected Roads</option>
+                    </select>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #00ff00;"></span>
+                        <span>Low Traffic (1.0-2.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ffff00;"></span>
+                        <span>Moderate (2.0-3.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ff8800;"></span>
+                        <span>High (3.0-5.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ff0000;"></span>
+                        <span>Severe (5.0+)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map" class="map-container"></div>
+
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <p>Loading graph data...</p>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+
+
+
