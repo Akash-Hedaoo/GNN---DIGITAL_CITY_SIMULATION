@@ -31,6 +31,8 @@ const CONFIG = {
         highCongestion: '#e74c3c',  // Red for high congestion
         lowCongestion: '#2ecc71',   // Green for low congestion
         closed: '#ff69b4',          // Pink for blocked roads,
+        route: '#00ff88',           // Bright green for route
+        routeGlow: '#00ffaa',       // Route glow color
         // Node colors
         node: '#95a5a6',
         nodeMetro: '#9b59b6',
@@ -43,6 +45,33 @@ const CONFIG = {
         warehouse: '#607d8b',
         office: '#3498db',
         community_center: '#9c27b0'
+    },
+    // Time-based congestion multipliers
+    TIME_MULTIPLIERS: {
+        0: 0.3,   // 12 AM - very low
+        1: 0.2,   // 1 AM
+        2: 0.2,   // 2 AM
+        3: 0.2,   // 3 AM
+        4: 0.3,   // 4 AM
+        5: 0.5,   // 5 AM - early risers
+        6: 0.7,   // 6 AM
+        7: 0.9,   // 7 AM - morning rush starts
+        8: 1.3,   // 8 AM - peak morning
+        9: 1.5,   // 9 AM - peak morning
+        10: 1.1,  // 10 AM
+        11: 1.0,  // 11 AM
+        12: 1.1,  // 12 PM - lunch
+        13: 1.0,  // 1 PM
+        14: 0.9,  // 2 PM
+        15: 0.9,  // 3 PM
+        16: 1.0,  // 4 PM
+        17: 1.3,  // 5 PM - evening rush starts
+        18: 1.5,  // 6 PM - peak evening
+        19: 1.4,  // 7 PM
+        20: 1.0,  // 8 PM
+        21: 0.8,  // 9 PM
+        22: 0.6,  // 10 PM
+        23: 0.4   // 11 PM
     }
 };
 
@@ -57,18 +86,33 @@ const state = {
     baselinePredictions: null,  // Store baseline for comparison
     baselineStats: null,
     closedRoads: new Set(),
+    removedNodes: new Set(),  // NEW: Nodes removed from simulation
+    nodeImpactAnalysis: {},  // NEW: Store impact analysis for each removed node
     layers: {
         roads: null,
         metro: null,
         nodes: null,
-        amenities: null
+        amenities: null,
+        route: null  // NEW: Route layer
     },
     visible: {
         roads: true,
         metro: true,
         nodes: true,
         amenities: true
-    }
+    },
+    // NEW: Theme state
+    theme: 'dark',
+    tileLayer: null,
+    // NEW: Current simulated hour
+    currentHour: 8,
+    // NEW: Route state
+    currentRoute: null,
+    routeMarkers: [],
+    // NEW: Node map for quick lookup
+    nodeMap: {},
+    // NEW: Transform function reference
+    transform: null
 };
 
 // ============================================================
@@ -96,6 +140,11 @@ async function init() {
 }
 
 function initMap() {
+    // Load saved theme
+    const savedTheme = localStorage.getItem('citySimTheme') || 'dark';
+    state.theme = savedTheme;
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
     if (CONFIG.USE_REAL_MAP) {
         // Real map with OpenStreetMap tiles
         state.map = L.map('map', {
@@ -107,12 +156,8 @@ function initMap() {
             wheelPxPerZoomLevel: 120 // More pixels needed to zoom (slower scroll zoom)
         });
 
-        // Add OpenStreetMap tile layer (dark theme)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(state.map);
+        // Add tile layer based on theme
+        updateMapTiles();
     } else {
         // Abstract view with simple coordinates
         state.map = L.map('map', {
@@ -128,6 +173,29 @@ function initMap() {
 
     // Add zoom control to top-right
     state.map.zoomControl.setPosition('topright');
+}
+
+// NEW: Update map tiles based on theme
+function updateMapTiles() {
+    if (state.tileLayer) {
+        state.map.removeLayer(state.tileLayer);
+    }
+    
+    if (state.theme === 'dark') {
+        state.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        });
+    } else {
+        state.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        });
+    }
+    
+    state.tileLayer.addTo(state.map);
 }
 
 function setupEventListeners() {
@@ -206,57 +274,382 @@ function setupEventListeners() {
         });
     }
     
-    const layerMetro = document.getElementById('layer-metro');
-    if (layerMetro) {
-        layerMetro.addEventListener('change', (e) => {
-            state.visible.metro = e.target.checked;
-            updateLayerVisibility();
+    // Analysis button
+    document.getElementById('btn-analysis').addEventListener('click', goToAnalysis);
+    
+    // NEW: Theme toggle
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // NEW: Search functionality
+    setupSearchListeners();
+    
+    // NEW: Route planner
+    document.getElementById('btn-find-route').addEventListener('click', findRoute);
+    document.getElementById('btn-clear-route').addEventListener('click', clearRoute);
+    
+    // NEW: Time slider
+    setupTimeSlider();
+}
+
+// NEW: Toggle between dark and light theme
+function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', state.theme);
+    localStorage.setItem('citySimTheme', state.theme);
+    
+    if (CONFIG.USE_REAL_MAP) {
+        updateMapTiles();
+    }
+    
+    showToast(`Switched to ${state.theme} theme`, 'info');
+}
+
+// NEW: Setup search listeners
+function setupSearchListeners() {
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+    
+    let searchTimeout = null;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim().toLowerCase();
+        
+        if (query.length < 2) {
+            searchResults.classList.remove('active');
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => performSearch(query), 300);
+    });
+    
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim().length >= 2) {
+            searchResults.classList.add('active');
+        }
+    });
+    
+    // Close search results when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-container')) {
+            searchResults.classList.remove('active');
+        }
+    });
+}
+
+// NEW: Perform search
+function performSearch(query) {
+    if (!state.graphData) return;
+    
+    const results = [];
+    const { nodes } = state.graphData;
+    
+    // Search through nodes
+    nodes.forEach(node => {
+        const amenity = (node.amenity || '').toLowerCase();
+        const zone = (node.zone || '').toLowerCase();
+        const nodeId = String(node.id).toLowerCase();
+        
+        let match = false;
+        let priority = 0;
+        
+        // Match by ID
+        if (nodeId.includes(query)) {
+            match = true;
+            priority = nodeId === query ? 3 : 1;
+        }
+        
+        // Match by amenity
+        if (amenity.includes(query)) {
+            match = true;
+            priority = 2;
+        }
+        
+        // Match by zone
+        if (zone.includes(query)) {
+            match = true;
+            priority = 1;
+        }
+        
+        if (match) {
+            results.push({ ...node, priority });
+        }
+    });
+    
+    // Sort by priority and limit results
+    results.sort((a, b) => b.priority - a.priority);
+    const topResults = results.slice(0, 10);
+    
+    // Display results
+    displaySearchResults(topResults);
+}
+
+// NEW: Display search results
+function displaySearchResults(results) {
+    const container = document.getElementById('search-results');
+    
+    if (results.length === 0) {
+        container.innerHTML = '<div class="search-result-item"><span class="result-text">No results found</span></div>';
+        container.classList.add('active');
+        return;
+    }
+    
+    container.innerHTML = results.map(node => {
+        const emoji = getAmenityEmoji(node.amenity);
+        const amenityText = node.amenity ? node.amenity.replace('_', ' ') : 'Node';
+        
+        return `
+            <div class="search-result-item" data-node-id="${node.id}">
+                <span class="result-icon">${emoji}</span>
+                <div class="result-text">
+                    <div class="result-name">Node ${node.id}</div>
+                    <div class="result-details">${amenityText} • ${node.zone} • Pop: ${node.population}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers
+    container.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const nodeId = item.dataset.nodeId;
+            focusOnNode(nodeId);
+            container.classList.remove('active');
+            document.getElementById('search-input').value = '';
         });
-    }
+    });
     
-    const layerNodes = document.getElementById('layer-nodes');
-    if (layerNodes) {
-        layerNodes.addEventListener('change', (e) => {
-            state.visible.nodes = e.target.checked;
-            updateLayerVisibility();
-        });
-    }
+    container.classList.add('active');
+}
+
+// NEW: Get emoji for amenity type
+function getAmenityEmoji(amenity) {
+    if (!amenity) return '📍';
+    const a = amenity.toLowerCase();
+    if (a.includes('hospital')) return '🏥';
+    if (a.includes('park')) return '🌳';
+    if (a.includes('school')) return '🏫';
+    if (a.includes('mall')) return '🛒';
+    if (a.includes('factory')) return '🏭';
+    if (a.includes('warehouse')) return '📦';
+    if (a.includes('office')) return '🏢';
+    if (a.includes('metro')) return '🚇';
+    if (a.includes('community')) return '🏛️';
+    return '📍';
+}
+
+// NEW: Focus map on a specific node
+function focusOnNode(nodeId) {
+    const node = state.nodeMap[nodeId];
+    if (!node || !state.transform) return;
     
-    const layerAmenities = document.getElementById('layer-amenities');
-    if (layerAmenities) {
-        layerAmenities.addEventListener('change', (e) => {
-            state.visible.amenities = e.target.checked;
-            updateLayerVisibility();
-        });
-    }
+    const pos = state.transform(node.x, node.y);
+    state.map.setView(pos, 16, { animate: true });
     
-    // Clear closures button
-    const clearClosuresBtn = document.getElementById('btn-clear-closures');
-    if (clearClosuresBtn) {
-        clearClosuresBtn.addEventListener('click', clearClosures);
-    }
+    // Show a temporary marker
+    const pulseIcon = L.divIcon({
+        html: '<div class="pulse-marker"></div>',
+        className: 'pulse-icon',
+        iconSize: [30, 30]
+    });
     
-    // Random road buttons
-    const randomCloseBtn = document.getElementById('btn-random-close');
-    if (randomCloseBtn) {
-        randomCloseBtn.addEventListener('click', randomCloseRoad);
-    }
+    const marker = L.marker(pos, { icon: pulseIcon }).addTo(state.map);
+    setTimeout(() => state.map.removeLayer(marker), 3000);
     
-    const randomOpenBtn = document.getElementById('btn-random-open');
-    if (randomOpenBtn) {
-        randomOpenBtn.addEventListener('click', randomOpenRoad);
-    }
+    // Show node info
+    showNodeInfo(node);
+    showToast(`Found: Node ${nodeId}`, 'success');
+}
+
+// NEW: Setup time slider
+function setupTimeSlider() {
+    const slider = document.getElementById('time-slider');
+    const timeDisplay = document.getElementById('current-time');
+    const periodDisplay = document.getElementById('time-period');
     
-    // Info panel close button - FIX: This was missing!
-    const closeInfoBtn = document.getElementById('close-info');
-    if (closeInfoBtn) {
-        closeInfoBtn.addEventListener('click', () => {
-            const panel = document.getElementById('info-panel');
-            if (panel) {
-                panel.classList.remove('visible');
+    slider.addEventListener('input', (e) => {
+        const hour = parseInt(e.target.value);
+        state.currentHour = hour;
+        updateTimeDisplay(hour);
+    });
+    
+    // Quick time buttons
+    document.querySelectorAll('.time-quick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const hour = parseInt(btn.dataset.hour);
+            slider.value = hour;
+            state.currentHour = hour;
+            updateTimeDisplay(hour);
+            
+            // Update button states
+            document.querySelectorAll('.time-quick-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Auto-run prediction with new time
+            if (state.graphData) {
+                runPrediction();
             }
         });
+    });
+}
+
+// NEW: Update time display
+function updateTimeDisplay(hour) {
+    const timeDisplay = document.getElementById('current-time');
+    const periodDisplay = document.getElementById('time-period');
+    
+    // Format time
+    const displayHour = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    const ampm = hour < 12 ? 'AM' : 'PM';
+    timeDisplay.textContent = `${String(displayHour).padStart(2, '0')}:00 ${ampm}`;
+    
+    // Determine period
+    let period, periodClass;
+    if (hour >= 6 && hour < 10) {
+        period = '🌅 Morning Rush';
+        periodClass = 'rush';
+    } else if (hour >= 10 && hour < 16) {
+        period = '☀️ Daytime';
+        periodClass = 'morning';
+    } else if (hour >= 16 && hour < 20) {
+        period = '🌆 Evening Rush';
+        periodClass = 'rush';
+    } else if (hour >= 20 || hour < 6) {
+        period = '🌙 Night';
+        periodClass = 'night';
     }
+    
+    periodDisplay.textContent = period;
+    periodDisplay.className = `time-period ${periodClass}`;
+}
+
+// NEW: Find route between two nodes
+async function findRoute() {
+    const sourceInput = document.getElementById('route-source').value.trim();
+    const targetInput = document.getElementById('route-target').value.trim();
+    
+    if (!sourceInput || !targetInput) {
+        showToast('Please enter both source and destination nodes', 'error');
+        return;
+    }
+    
+    showLoading('Finding route...');
+    
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/shortest-path`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: sourceInput, target: targetInput })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Store and display route
+        state.currentRoute = data;
+        displayRoute(data);
+        
+        showToast(`Route found: ${data.hops} hops`, 'success');
+    } catch (error) {
+        console.error('Route finding failed:', error);
+        showToast('Route not found: ' + error.message, 'error');
+    }
+    
+    hideLoading();
+}
+
+// NEW: Display route on map
+function displayRoute(routeData) {
+    // Clear previous route
+    clearRouteLayer();
+    
+    if (!routeData.path || routeData.path.length < 2) return;
+    
+    const { path, length, hops } = routeData;
+    
+    // Create route layer
+    state.layers.route = L.layerGroup();
+    
+    // Build path coordinates
+    const pathCoords = [];
+    path.forEach(nodeId => {
+        const node = state.nodeMap[nodeId];
+        if (node && state.transform) {
+            pathCoords.push(state.transform(node.x, node.y));
+        }
+    });
+    
+    // Draw route line (with glow effect)
+    const glowLine = L.polyline(pathCoords, {
+        color: CONFIG.COLORS.routeGlow,
+        weight: 10,
+        opacity: 0.3
+    });
+    
+    const routeLine = L.polyline(pathCoords, {
+        color: CONFIG.COLORS.route,
+        weight: 5,
+        opacity: 0.9,
+        dashArray: '10, 5'
+    });
+    
+    state.layers.route.addLayer(glowLine);
+    state.layers.route.addLayer(routeLine);
+    
+    // Add start marker
+    const startIcon = L.divIcon({
+        html: '<div class="route-marker start">🟢</div>',
+        className: 'route-marker-icon',
+        iconSize: [30, 30]
+    });
+    const startMarker = L.marker(pathCoords[0], { icon: startIcon });
+    state.layers.route.addLayer(startMarker);
+    state.routeMarkers.push(startMarker);
+    
+    // Add end marker
+    const endIcon = L.divIcon({
+        html: '<div class="route-marker end">🔴</div>',
+        className: 'route-marker-icon',
+        iconSize: [30, 30]
+    });
+    const endMarker = L.marker(pathCoords[pathCoords.length - 1], { icon: endIcon });
+    state.layers.route.addLayer(endMarker);
+    state.routeMarkers.push(endMarker);
+    
+    // Add to map
+    state.layers.route.addTo(state.map);
+    
+    // Fit bounds to show entire route
+    state.map.fitBounds(L.latLngBounds(pathCoords), { padding: [50, 50] });
+    
+    // Update route info panel
+    const routeInfo = document.getElementById('route-info');
+    document.getElementById('route-distance').textContent = `${length.toFixed(2)} units`;
+    document.getElementById('route-time').textContent = `${(length * 2).toFixed(1)} min`;
+    document.getElementById('route-hops').textContent = `${hops} nodes`;
+    routeInfo.classList.add('active');
+}
+
+// NEW: Clear route layer
+function clearRouteLayer() {
+    if (state.layers.route) {
+        state.map.removeLayer(state.layers.route);
+        state.layers.route = null;
+    }
+    state.routeMarkers = [];
+    state.currentRoute = null;
+}
+
+// NEW: Clear route (button handler)
+function clearRoute() {
+    clearRouteLayer();
+    document.getElementById('route-source').value = '';
+    document.getElementById('route-target').value = '';
+    document.getElementById('route-info').classList.remove('active');
+    showToast('Route cleared', 'info');
 }
 
 // Navigate to analysis page with current state
@@ -333,7 +726,7 @@ async function runPrediction() {
         const baselineResponse = await fetch(`${CONFIG.API_BASE}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ closed_roads: [] })
+            body: JSON.stringify({ closed_roads: [], hour: state.currentHour })
         });
         state.baselinePredictions = await baselineResponse.json();
         state.baselineStats = state.baselinePredictions?.stats || null;
@@ -343,7 +736,8 @@ async function runPrediction() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                closed_roads: Array.from(state.closedRoads)
+                closed_roads: Array.from(state.closedRoads),
+                hour: state.currentHour
             })
         });
         
@@ -353,6 +747,16 @@ async function runPrediction() {
             throw new Error(data.error);
         }
         
+        // Apply time-based multiplier to predictions (client-side for visualization)
+        const timeMultiplier = CONFIG.TIME_MULTIPLIERS[state.currentHour] || 1.0;
+        data.predictions.forEach(p => {
+            p.congestion = p.congestion * timeMultiplier;
+        });
+        data.stats.mean_congestion *= timeMultiplier;
+        data.stats.max_congestion *= timeMultiplier;
+        data.stats.road_mean *= timeMultiplier;
+        data.stats.metro_mean *= timeMultiplier;
+        
         state.predictions = data;
         
         // Update visualization
@@ -360,38 +764,17 @@ async function runPrediction() {
         const baselineStats = state.closedRoads.size > 0 ? state.baselineStats : null;
         updateStatsUI(data.stats, baselineStats);
         
-        // Show result message and save data for analysis page
+        // Show result message with time info
+        const hour = state.currentHour;
+        const timeStr = `${hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour)}${hour < 12 ? 'AM' : 'PM'}`;
+        
         if (state.closedRoads.size > 0) {
             console.log('=== PREDICTION WITH ROAD CLOSURES ===');
             console.log(`Closed roads: ${Array.from(state.closedRoads).join(', ')}`);
-            
-            // Save data for analysis page
-            const analysisData = {
-                closedRoads: Array.from(state.closedRoads),
-                baseline: state.baselinePredictions,
-                withClosures: state.predictions,
-                timestamp: new Date().toISOString()
-            };
-            
-            console.log('💾 Saving analysis data:', {
-                closedRoads: analysisData.closedRoads.length,
-                baselinePredictions: analysisData.baseline?.predictions?.length || 0,
-                withClosuresPredictions: analysisData.withClosures?.predictions?.length || 0,
-                baselineStats: analysisData.baseline?.stats,
-                withClosuresStats: analysisData.withClosures?.stats
-            });
-            
-            localStorage.setItem('cityAnalysisData', JSON.stringify(analysisData));
-            
-            showToast(`Prediction done! Click "View Analysis" to see detailed impact`, 'success');
-            
-            // Show analysis button
-            const analysisBtn = document.getElementById('view-analysis-btn');
-            if (analysisBtn) analysisBtn.style.display = 'block';
+            console.log(`Time: ${timeStr}, Multiplier: ${timeMultiplier}x`);
+            showToast(`Prediction at ${timeStr}: Impact of ${state.closedRoads.size} blocked road(s)`, 'success');
         } else {
-            showToast('Prediction done! Showing current traffic levels', 'success');
-            const analysisBtn = document.getElementById('view-analysis-btn');
-            if (analysisBtn) analysisBtn.style.display = 'none';
+            showToast(`Prediction at ${timeStr}: Current traffic levels`, 'success');
         }
     } catch (error) {
         console.error('Prediction failed:', error);
@@ -414,9 +797,10 @@ function renderGraph() {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     
-    const nodeMap = {};
+    // Build node map for quick lookups (NEW)
+    state.nodeMap = {};
     nodes.forEach(node => {
-        nodeMap[node.id] = node;
+        state.nodeMap[node.id] = node;
         minX = Math.min(minX, node.x);
         maxX = Math.max(maxX, node.x);
         minY = Math.min(minY, node.y);
@@ -429,21 +813,22 @@ function renderGraph() {
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
     
-    // Transform function: maps graph coords to real-world lat/lng
-    let transform;
+    // Transform function: maps graph coords to real-world lat/lng (store in state)
     if (CONFIG.USE_REAL_MAP) {
         // Map to real Pune coordinates
         // Scale to cover roughly 5km x 5km area (0.045 degrees ~ 5km)
         const scaleFactor = 0.045 / Math.max(rangeX, rangeY);
-        transform = (x, y) => [
+        state.transform = (x, y) => [
             CONFIG.MAP_CENTER[0] + (y - centerY) * scaleFactor,
             CONFIG.MAP_CENTER[1] + (x - centerX) * scaleFactor
         ];
     } else {
         // Simple scaling for abstract view
         const scale = 10;
-        transform = (x, y) => [y * scale, x * scale];
+        state.transform = (x, y) => [y * scale, x * scale];
     }
+    
+    const transform = state.transform;
     
     // Clear existing layers
     Object.values(state.layers).forEach(layer => {
@@ -458,8 +843,8 @@ function renderGraph() {
     
     // Render edges
     edges.forEach(edge => {
-        const source = nodeMap[edge.source];
-        const target = nodeMap[edge.target];
+        const source = state.nodeMap[edge.source];
+        const target = state.nodeMap[edge.target];
         
         if (!source || !target) return;
         
@@ -840,97 +1225,198 @@ function clearClosures() {
     showToast('All road closures cleared', 'info');
 }
 
-function randomCloseRoad() {
-    if (!state.graphData || !state.graphData.edges) {
-        showToast('No graph data available', 'error');
+// NEW: Remove a node from the simulation
+async function removeNode(nodeId) {
+    if (state.removedNodes.has(nodeId)) {
+        showToast(`Node ${nodeId} is already removed`, 'warning');
         return;
     }
     
-    // Get the count from input field
-    const countInput = document.getElementById('random-road-count');
-    let count = parseInt(countInput.value) || 1;
+    showLoading(`Analyzing traffic impact of removing node ${nodeId}...`);
     
-    // Filter out already closed roads
-    const openRoads = state.graphData.edges.filter(edge => {
-        const roadId = `${edge.source}-${edge.target}`;
-        return !state.closedRoads.has(roadId);
-    });
-    
-    if (openRoads.length === 0) {
-        showToast('All roads are already closed', 'warning');
-        return;
-    }
-    
-    // Adjust count if it exceeds available roads
-    count = Math.min(count, openRoads.length);
-    
-    // Shuffle and pick 'count' random roads
-    const shuffled = openRoads.sort(() => 0.5 - Math.random());
-    const selectedRoads = shuffled.slice(0, count);
-    
-    let blockedCount = 0;
-    selectedRoads.forEach(randomEdge => {
-        const roadId = `${randomEdge.source}-${randomEdge.target}`;
+    try {
+        // Call backend API to analyze node removal impact
+        const response = await fetch(`${CONFIG.API_BASE}/analyze-node-removal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                node_id: nodeId,
+                hour: state.currentHour
+            })
+        });
         
-        // Close it
-        state.closedRoads.add(roadId);
+        const data = await response.json();
         
-        if (randomEdge._polyline) {
-            randomEdge._polyline.setStyle({
-                color: '#ff69b4',
-                weight: 4,
-                dashArray: '10, 6'
-            });
+        if (data.error) {
+            throw new Error(data.error);
         }
-        blockedCount++;
-    });
-    
-    updateClosedRoadsList();
-    showToast(`🚧 Randomly blocked ${blockedCount} road${blockedCount > 1 ? 's' : ''}`, 'warning');
+        
+        // Store the impact analysis
+        state.removedNodes.add(nodeId);
+        state.nodeImpactAnalysis[nodeId] = data.impact_analysis;
+        
+        // Close all edges connected to this node
+        const affectedEdges = data.affected_edges;
+        affectedEdges.forEach(roadId => {
+            if (!state.closedRoads.has(roadId)) {
+                state.closedRoads.add(roadId);
+                
+                // Update visual
+                const edge = state.graphData.edges.find(e => 
+                    `${e.source}-${e.target}` === roadId
+                );
+                if (edge && edge._polyline) {
+                    edge._polyline.setStyle({
+                        color: '#ff69b4',  // Pink
+                        weight: 4,
+                        dashArray: '10, 6'
+                    });
+                }
+            }
+        });
+        
+        // Update UI
+        updateClosedRoadsList();
+        updateRemovedNodesList();
+        
+        // Update predictions based on new state
+        await runPrediction();
+        
+        // Show impact summary
+        showNodeRemovalImpact(nodeId, data.impact_analysis);
+        
+        hideLoading();
+        showToast(`Node ${nodeId} removed - Impact analysis complete`, 'success');
+        
+    } catch (error) {
+        console.error('Node removal analysis failed:', error);
+        showToast('Node removal analysis failed: ' + error.message, 'error');
+        state.removedNodes.delete(nodeId);
+        hideLoading();
+    }
 }
 
-function randomOpenRoad() {
-    if (state.closedRoads.size === 0) {
-        showToast('No roads are closed', 'info');
+// NEW: Restore a removed node
+async function restoreNode(nodeId) {
+    if (!state.removedNodes.has(nodeId)) {
+        showToast(`Node ${nodeId} was not removed`, 'warning');
         return;
     }
     
-    // Get the count from input field
-    const countInput = document.getElementById('random-road-count');
-    let count = parseInt(countInput.value) || 1;
+    showLoading(`Restoring node ${nodeId}...`);
     
-    // Pick random closed roads
-    const closedArray = Array.from(state.closedRoads);
-    
-    // Adjust count if it exceeds closed roads
-    count = Math.min(count, closedArray.length);
-    
-    // Shuffle and select 'count' roads
-    const shuffled = closedArray.sort(() => 0.5 - Math.random());
-    const selectedRoads = shuffled.slice(0, count);
-    
-    let openedCount = 0;
-    selectedRoads.forEach(randomRoadId => {
-        // Open it
-        state.closedRoads.delete(randomRoadId);
+    try {
+        // Find and reopen affected edges
+        const impactAnalysis = state.nodeImpactAnalysis[nodeId];
+        const affectedEdges = [];
         
-        // Find and update visual
-        const edge = state.graphData.edges.find(e => 
-            `${e.source}-${e.target}` === randomRoadId
-        );
+        // Get all edges connected to this node to find which ones were affected
+        state.graphData.edges.forEach(edge => {
+            const roadId = `${edge.source}-${edge.target}`;
+            if (edge.source == nodeId || edge.target == nodeId) {
+                affectedEdges.push(roadId);
+            }
+        });
         
-        if (edge && edge._polyline) {
-            edge._polyline.setStyle({
-                color: '#3498db',
-                weight: 2,
-                dashArray: null
-            });
-        }
-        openedCount++;
+        // Remove from state
+        state.removedNodes.delete(nodeId);
+        delete state.nodeImpactAnalysis[nodeId];
+        
+        // Reopen edges (remove from closed roads)
+        affectedEdges.forEach(roadId => {
+            state.closedRoads.delete(roadId);
+            
+            // Update visual
+            const edge = state.graphData.edges.find(e => 
+                `${e.source}-${e.target}` === roadId
+            );
+            if (edge && edge._polyline) {
+                edge._polyline.setStyle({
+                    color: CONFIG.COLORS.road,
+                    dashArray: null
+                });
+            }
+        });
+        
+        // Update UI
+        updateClosedRoadsList();
+        updateRemovedNodesList();
+        
+        // Update predictions
+        await runPrediction();
+        
+        hideLoading();
+        showToast(`Node ${nodeId} restored`, 'success');
+        
+    } catch (error) {
+        console.error('Node restoration failed:', error);
+        showToast('Node restoration failed: ' + error.message, 'error');
+        hideLoading();
+    }
+}
+
+// NEW: Update removed nodes list in UI
+function updateRemovedNodesList() {
+    const container = document.getElementById('removed-nodes-list');
+    
+    if (!container) return;
+    
+    if (state.removedNodes.size === 0) {
+        container.innerHTML = '<p class="empty-message">No nodes removed</p>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    state.removedNodes.forEach(nodeId => {
+        const item = document.createElement('div');
+        item.className = 'removed-node-item';
+        const impact = state.nodeImpactAnalysis[nodeId];
+        const affectedEdges = impact.closed_edges_count;
+        
+        item.innerHTML = `
+            <div class="node-info">
+                <strong>Node ${nodeId}</strong>
+                <small>${affectedEdges} edges closed • ${impact.node_details.amenity}</small>
+            </div>
+            <button class="btn-restore" onclick="restoreNode('${nodeId}')">Restore</button>
+        `;
+        container.appendChild(item);
     });
+}
+
+// NEW: Show detailed impact analysis for removed node
+function showNodeRemovalImpact(nodeId, impact) {
+    const panel = document.getElementById('info-panel');
+    const title = document.getElementById('info-title');
+    const content = document.getElementById('info-content');
     
-    updateClosedRoadsList();
-    showToast(`✅ Randomly opened ${openedCount} road${openedCount > 1 ? 's' : ''}`, 'success');
+    const node = impact.node_details;
+    const congestionPercent = (impact.mean_congestion * 100).toFixed(1);
+    const maxCongestionPercent = (impact.max_congestion * 100).toFixed(1);
+    const closedEdgeCongestionPercent = (impact.mean_closed_edge_congestion * 100).toFixed(1);
+    
+    title.textContent = `Node ${nodeId} - Removal Impact Analysis`;
+    content.innerHTML = `
+        <div class="impact-analysis">
+            <h5>Node Details</h5>
+            <p><span class="label">Zone:</span> <span class="value">${node.zone}</span></p>
+            <p><span class="label">Population:</span> <span class="value">${node.population.toLocaleString()}</span></p>
+            <p><span class="label">Amenity:</span> <span class="value">${node.amenity || 'None'}</span></p>
+            
+            <h5 style="margin-top: 15px;">Traffic Impact</h5>
+            <p><span class="label">Edges Closed:</span> <span class="value highlight">${impact.closed_edges_count}</span></p>
+            <p><span class="label">Mean Congestion (Closed Edges):</span> <span class="value">${closedEdgeCongestionPercent}%</span></p>
+            <p><span class="label">Max Congestion (Closed Edges):</span> <span class="value">${(impact.max_closed_edge_congestion * 100).toFixed(1)}%</span></p>
+            <p><span class="label">Overall Mean Congestion:</span> <span class="value">${congestionPercent}%</span></p>
+            <p><span class="label">Overall Max Congestion:</span> <span class="value">${maxCongestionPercent}%</span></p>
+            
+            <h5 style="margin-top: 15px;">Transport Mode Impact</h5>
+            <p><span class="label">Road Average:</span> <span class="value">${(impact.road_mean * 100).toFixed(1)}%</span></p>
+            <p><span class="label">Metro Average:</span> <span class="value">${(impact.metro_mean * 100).toFixed(1)}%</span></p>
+        </div>
+    `;
+    
+    panel.classList.add('visible');
 }
 
 // ============================================================
@@ -1017,12 +1503,23 @@ function showNodeInfo(node) {
     const content = document.getElementById('info-content');
     
     title.textContent = `Node ${node.id}`;
+    
+    const isRemoved = state.removedNodes.has(node.id);
+    const removeButtonText = isRemoved ? 'Restore Node' : 'Remove Node';
+    const removeButtonClass = isRemoved ? 'btn-restore-node' : 'btn-remove-node';
+    const removeButtonAction = isRemoved ? `restoreNode('${node.id}')` : `removeNode('${node.id}')`;
+    
     content.innerHTML = `
         <p><span class="label">Zone:</span> <span class="value">${node.zone}</span></p>
         <p><span class="label">Population:</span> <span class="value">${node.population.toLocaleString()}</span></p>
         <p><span class="label">Amenity:</span> <span class="value">${node.amenity || 'None'}</span></p>
         <p><span class="label">Metro Station:</span> <span class="value">${node.is_metro ? 'Yes' : 'No'}</span></p>
         <p><span class="label">Position:</span> <span class="value">(${node.x.toFixed(2)}, ${node.y.toFixed(2)})</span></p>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button class="btn ${removeButtonClass}" onclick="${removeButtonAction}">
+                <i class="fas fa-${isRemoved ? 'undo' : 'trash'}"></i> ${removeButtonText}
+            </button>
+        </div>
     `;
     
     panel.classList.add('visible');
@@ -1086,233 +1583,6 @@ function showToast(message, type = 'info') {
 // Make removeClosedRoad available globally for onclick
 window.removeClosedRoad = removeClosedRoad;
 
-// ============================================================
-// CTM (CELL TRANSMISSION MODEL) FUNCTIONS
-// ============================================================
-
-async function initCTM() {
-    console.log('🚀 initCTM called');
-    showLoading('Initializing CTM... (this may take 10-30 seconds for large graphs)');
-    
-    try {
-        console.log('📡 Fetching CTM initialize endpoint...');
-        const startTime = Date.now();
-        
-        const response = await fetch(`${CONFIG.API_BASE}/ctm/initialize`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                cell_length_km: 0.5,
-                time_step_hours: 1.0/60.0,
-                initial_density_ratio: 0.3,
-                demand_generation_rate: 100.0
-            })
-        });
-        
-        const data = await response.json();
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        
-        if (data.status === 'initialized') {
-            const cellCount = data.total_cells.toLocaleString();
-            showToast(`CTM initialized in ${elapsed}s: ${cellCount} cells created`, 'success');
-            console.log(`✅ CTM initialization took ${elapsed}s`);
-            updateCTMStats(data.stats);
-            
-            // Initial visualization
-            await updateCTMVisualization();
-        } else {
-            showToast('Failed to initialize CTM', 'error');
-        }
-    } catch (error) {
-        console.error('CTM init error:', error);
-        showToast('Error initializing CTM: ' + error.message, 'error');
-    }
-    
-    hideLoading();
-}
-
-async function stepCTM(numSteps = 1) {
-    console.log(`🚀 stepCTM called with ${numSteps} steps`);
-    showLoading(`Running ${numSteps} simulation step(s)...`);
-    
-    try {
-        console.log('📡 Fetching CTM step endpoint...');
-        const response = await fetch(`${CONFIG.API_BASE}/ctm/step`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ steps: numSteps })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            showToast(`Completed ${data.steps_completed} steps`, 'success');
-            updateCTMStats(data.stats);
-            
-            // Update visualization with CTM congestion
-            await updateCTMVisualization();
-        } else {
-            showToast('CTM step failed', 'error');
-        }
-    } catch (error) {
-        console.error('CTM step error:', error);
-        showToast('Error running CTM step', 'error');
-    }
-    
-    hideLoading();
-}
-
-async function updateCTMVisualization() {
-    try {
-        console.log('🎨 Fetching CTM edge congestion data...');
-        const response = await fetch(`${CONFIG.API_BASE}/ctm/edge-congestion`);
-        const data = await response.json();
-        
-        if (!data.edges || data.edges.length === 0) {
-            console.warn('⚠️ No CTM edge data received');
-            showToast('No CTM data available', 'warning');
-            return;
-        }
-        
-        console.log(`📊 Received CTM data for ${data.edges.length} edges`);
-        let updatedCount = 0;
-        
-        if (data.edges && state.layers.roads) {
-            // Update road colors based on CTM congestion
-            state.layers.roads.eachLayer((layer) => {
-                const edgeData = data.edges.find(e => 
-                    e.source == layer.feature.source && 
-                    e.target == layer.feature.target
-                );
-                
-                if (edgeData) {
-                    const color = getCongestionColor(edgeData.congestion);
-                    layer.setStyle({ 
-                        color: color, 
-                        weight: 4,
-                        opacity: 0.9
-                    });
-                    updatedCount++;
-                }
-            });
-            console.log(`✅ Updated ${updatedCount} roads with CTM congestion colors`);
-        } else {
-            console.warn('⚠️ Missing road layers or CTM data');
-        }
-    } catch (error) {
-        console.error('❌ CTM visualization error:', error);
-        showToast('Failed to update CTM visualization', 'error');
-    }
-}
-
-function getCongestionColor(congestionLevel) {
-    // congestionLevel is 0.0 to 1.0 (0% to 100%)
-    if (congestionLevel >= 0.8) return '#c0392b';  // Very high - dark red
-    if (congestionLevel >= 0.6) return '#e67e22';  // High - orange
-    if (congestionLevel >= 0.4) return '#f1c40f';  // Medium - yellow
-    if (congestionLevel >= 0.2) return '#2ecc71';  // Low - green
-    return '#1e8449';  // Very low - dark green
-}
-
-function updateCTMStats(stats) {
-    if (!stats) {
-        console.warn('No stats provided to updateCTMStats');
-        return;
-    }
-    
-    console.log('📊 Updating CTM stats:', stats);
-    
-    // Update CTM status panel
-    const ctmTime = document.getElementById('ctm-time');
-    const ctmVehicles = document.getElementById('ctm-vehicles');
-    const ctmDensity = document.getElementById('ctm-density');
-    
-    if (ctmTime) ctmTime.textContent = `${stats.simulation_time?.toFixed(1) || 0} min`;
-    if (ctmVehicles) ctmVehicles.textContent = (stats.total_vehicles || 0).toLocaleString();
-    if (ctmDensity) ctmDensity.textContent = `${((stats.average_congestion || 0) * 100).toFixed(1)}%`;
-    
-    // Update main stats panel
-    const avgCongestion = stats.average_congestion || stats.mean_congestion || 0;
-    const maxCongestion = stats.max_congestion || 0;
-    const roadAvg = stats.road_avg_congestion || stats.road_mean || 0;
-    const metroAvg = stats.metro_avg_congestion || stats.metro_mean || 0;
-    
-    document.getElementById('stat-mean').textContent = `${(avgCongestion * 100).toFixed(1)}%`;
-    document.getElementById('stat-max').textContent = `${(maxCongestion * 100).toFixed(1)}%`;
-    document.getElementById('stat-road').textContent = `${(roadAvg * 100).toFixed(1)}%`;
-    document.getElementById('stat-metro').textContent = `${(metroAvg * 100).toFixed(1)}%`;
-    
-    console.log('✅ Stats updated successfully');
-}
-
-async function resetCTM() {
-    showLoading('Resetting CTM...');
-    
-    try {
-        const response = await fetch(`${CONFIG.API_BASE}/ctm/reset`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'reset') {
-            showToast('CTM reset successfully', 'success');
-            
-            // Reset stats display
-            document.getElementById('ctm-time').textContent = '0 min';
-            document.getElementById('ctm-vehicles').textContent = '0';
-            document.getElementById('ctm-density').textContent = '0%';
-            
-            // Reset visualization
-            if (state.graphData) {
-                renderGraph();
-            }
-        } else {
-            showToast('Failed to reset CTM', 'error');
-        }
-    } catch (error) {
-        console.error('CTM reset error:', error);
-        showToast('Error resetting CTM', 'error');
-    }
-    
-    hideLoading();
-}
-
-// CTM road closure - replaces the old method
-async function addClosedRoad(source, target) {
-    try {
-        const response = await fetch(`${CONFIG.API_BASE}/ctm/close-road`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source, target, key: 0 })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'closed') {
-            state.closedRoads.add(`${source}-${target}`);
-            updateClosedRoadsList();
-            updateCTMStats(data.stats);
-            await updateCTMVisualization();
-            showToast(`Road ${source} → ${target} closed`, 'info');
-        }
-    } catch (error) {
-        console.error('CTM close road error:', error);
-        showToast('Error closing road', 'error');
-    }
-}
-
-// ============================================================
-// EXPOSE FUNCTIONS TO WINDOW FOR DEBUGGING
-// ============================================================
-window.initCTM = initCTM;
-window.stepCTM = stepCTM;
-window.resetCTM = resetCTM;
-window.updateCTMVisualization = updateCTMVisualization;
-
-// Log when script loads
-console.log('✅ CTM functions loaded:', {
-    initCTM: typeof initCTM,
-    stepCTM: typeof stepCTM,
-    resetCTM: typeof resetCTM
-});
+// NEW: Make node removal functions available globally for onclick
+window.removeNode = removeNode;
+window.restoreNode = restoreNode;

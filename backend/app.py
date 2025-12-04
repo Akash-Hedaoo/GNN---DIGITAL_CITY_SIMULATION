@@ -243,6 +243,7 @@ def predict_traffic():
     try:
         data = request.json or {}
         closed_roads = data.get('closed_roads', [])
+        hour = data.get('hour', 8)  # Default to 8 AM
         
         print(f"\n[PREDICT] Received prediction request")
         print(f"   Closed roads: {closed_roads if closed_roads else 'None'}")
@@ -330,6 +331,140 @@ def predict_traffic():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/analyze-node-removal', methods=['POST'])
+def analyze_node_removal():
+    """Analyze traffic impact when removing a node (closes all connected edges)"""
+    if not graph_loaded:
+        return jsonify({'error': 'Graph not loaded'}), 500
+    
+    if not model_loaded:
+        return jsonify({'error': 'Model not loaded'}), 500
+    
+    try:
+        data = request.json or {}
+        removed_node = data.get('node_id')
+        hour = data.get('hour', 8)
+        
+        if not removed_node:
+            return jsonify({'error': 'node_id required'}), 400
+        
+        # Convert node_id to match graph node types
+        removed_node = str(removed_node)
+        
+        # Find the actual node in graph (case-insensitive string match)
+        actual_node = None
+        for node in graph.nodes():
+            if str(node) == removed_node:
+                actual_node = node
+                break
+        
+        if actual_node is None:
+            return jsonify({'error': f'Node {removed_node} not found'}), 404
+        
+        removed_node = actual_node
+        
+        # Find all edges connected to this node
+        connected_edges = []
+        for u, v in graph.edges():
+            if u == removed_node or v == removed_node:
+                connected_edges.append(f"{u}-{v}")
+        
+        # Get node details
+        node_data = graph.nodes[removed_node]
+        node_details = {
+            'id': str(removed_node),
+            'zone': node_data.get('zone', 'unknown'),
+            'population': int(float(node_data.get('population', 0))),
+            'amenity': node_data.get('amenity', 'none'),
+            'x': float(node_data.get('x', 0)),
+            'y': float(node_data.get('y', 0))
+        }
+        
+        # Run baseline prediction (no closures)
+        node_to_idx = {n: i for i, n in enumerate(graph.nodes())}
+        num_nodes = len(node_to_idx)
+        
+        node_features = np.zeros((num_nodes, 4), dtype=np.float32)
+        for node_id, idx in node_to_idx.items():
+            node_data = graph.nodes[node_id]
+            node_features[idx, 0] = float(node_data.get('population', 0)) / 10000.0
+            node_features[idx, 1] = 1.0 if node_data.get('is_metro_station', 'False') == 'True' else 0.0
+            node_features[idx, 2] = float(node_data.get('x', 0))
+            node_features[idx, 3] = float(node_data.get('y', 0))
+        
+        # Build predictions with closed edges
+        edge_list = []
+        edge_features = []
+        edge_info = []
+        
+        for u, v, edge_data in graph.edges(data=True):
+            u_idx = node_to_idx[u]
+            v_idx = node_to_idx[v]
+            edge_list.append([u_idx, v_idx])
+            
+            # Close edge if it's connected to the removed node
+            is_closed = 1.0 if f"{u}-{v}" in connected_edges else 0.0
+            key = edge_data.get('key', '0')
+            is_metro = 1.0 if key == 'metro' or edge_data.get('edge_type', '') == 'metro' else 0.0
+            base_time = float(edge_data.get('base_travel_time', 1.0))
+            
+            edge_features.append([base_time, is_closed, is_metro])
+            edge_info.append({
+                'source': str(u),
+                'target': str(v),
+                'key': key,
+                'is_metro': is_metro == 1.0,
+                'is_closed': is_closed == 1.0,
+                'connected_to_removed': f"{u}-{v}" in connected_edges
+            })
+        
+        # Convert to tensors and predict
+        x = torch.tensor(node_features, dtype=torch.float32).to(device)
+        edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous().to(device)
+        edge_attr = torch.tensor(edge_features, dtype=torch.float32).to(device)
+        
+        with torch.no_grad():
+            predictions = model(x, edge_index, edge_attr)
+            predictions = predictions.cpu().numpy().flatten()
+            # Convert to Python floats for JSON serialization
+            predictions = [float(p) for p in predictions]
+        
+        # Build results
+        results = []
+        for i, info in enumerate(edge_info):
+            results.append({
+                **info,
+                'congestion': predictions[i]
+            })
+        
+        # Calculate statistics
+        closed_edge_preds = [predictions[i] for i, info in enumerate(edge_info) if info['is_closed']]
+        road_preds = [predictions[i] for i, info in enumerate(edge_info) if edge_info[i]['is_metro'] == False]
+        metro_preds = [predictions[i] for i, info in enumerate(edge_info) if edge_info[i]['is_metro'] == True]
+        
+        impact_stats = {
+            'removed_node': str(removed_node),
+            'node_details': node_details,
+            'closed_edges_count': len(connected_edges),
+            'closed_edge_predictions': closed_edge_preds,
+            'mean_closed_edge_congestion': float(np.mean(closed_edge_preds)) if closed_edge_preds else 0,
+            'max_closed_edge_congestion': float(np.max(closed_edge_preds)) if closed_edge_preds else 0,
+            'mean_congestion': float(np.mean(predictions)),
+            'max_congestion': float(np.max(predictions)),
+            'road_mean': float(np.mean(road_preds)) if road_preds else 0,
+            'metro_mean': float(np.mean(metro_preds)) if metro_preds else 0
+        }
+        
+        return jsonify({
+            'impact_analysis': impact_stats,
+            'affected_edges': connected_edges,
+            'predictions': results
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/zones')
 def get_zones():
     """Get zone statistics"""
@@ -367,6 +502,37 @@ def get_amenities():
             })
     
     return jsonify({'amenities': amenities})
+
+
+@app.route('/api/search')
+def search_nodes():
+    """Search for nodes by query"""
+    if not graph_loaded:
+        return jsonify({'error': 'Graph not loaded'}), 500
+    
+    query = request.args.get('q', '').lower().strip()
+    if len(query) < 2:
+        return jsonify({'results': []})
+    
+    results = []
+    for node_id, data in graph.nodes(data=True):
+        amenity = str(data.get('amenity', '')).lower()
+        zone = str(data.get('zone', '')).lower()
+        node_id_str = str(node_id).lower()
+        
+        # Check for matches
+        if query in node_id_str or query in amenity or query in zone:
+            results.append({
+                'id': node_id,
+                'x': float(data.get('x', 0)),
+                'y': float(data.get('y', 0)),
+                'zone': data.get('zone', 'unknown'),
+                'population': int(float(data.get('population', 0))),
+                'amenity': data.get('amenity', 'none')
+            })
+    
+    # Limit results
+    return jsonify({'results': results[:20]})
 
 
 @app.route('/api/shortest-path', methods=['POST'])

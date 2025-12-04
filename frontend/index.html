@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,6 +18,19 @@
             <h1>Digital Twin City Simulation</h1>
         </div>
         <div class="header-right">
+            <!-- Search Bar -->
+            <div class="search-container">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" class="search-input" id="search-input" placeholder="Search locations, nodes, amenities...">
+                <div class="search-results" id="search-results"></div>
+            </div>
+            
+            <!-- Theme Toggle -->
+            <button class="theme-toggle" id="theme-toggle" title="Toggle Dark/Light Theme">
+                <i class="fas fa-moon"></i>
+                <i class="fas fa-sun"></i>
+            </button>
+            
             <span class="status-badge" id="status-badge">
                 <i class="fas fa-circle"></i>
                 <span id="status-text">Connecting...</span>
@@ -141,6 +154,69 @@
                 </div>
             </div>
 
+            <!-- Route Planner (NEW!) -->
+            <div class="panel">
+                <h3><i class="fas fa-route"></i> Route Planner</h3>
+                <div class="route-planner">
+                    <div class="route-input-group">
+                        <div class="route-input">
+                            <i class="fas fa-circle"></i>
+                            <input type="text" id="route-source" placeholder="Start node (e.g., 0)">
+                        </div>
+                        <div class="route-input">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <input type="text" id="route-target" placeholder="End node (e.g., 100)">
+                        </div>
+                    </div>
+                    <button class="btn btn-route" id="btn-find-route">
+                        <i class="fas fa-directions"></i> Find Route
+                    </button>
+                    <button class="btn btn-secondary" id="btn-clear-route">
+                        <i class="fas fa-times"></i> Clear Route
+                    </button>
+                    <div class="route-info" id="route-info">
+                        <div class="route-info-row">
+                            <span class="label">Distance</span>
+                            <span class="value" id="route-distance">--</span>
+                        </div>
+                        <div class="route-info-row">
+                            <span class="label">Travel Time</span>
+                            <span class="value" id="route-time">--</span>
+                        </div>
+                        <div class="route-info-row">
+                            <span class="label">Hops</span>
+                            <span class="value" id="route-hops">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Simulation (NEW!) -->
+            <div class="panel">
+                <h3><i class="fas fa-clock"></i> Time Simulation</h3>
+                <div class="time-slider-container">
+                    <div class="time-display">
+                        <span class="current-time" id="current-time">08:00 AM</span>
+                        <span class="time-period rush" id="time-period">🚗 Morning Rush</span>
+                    </div>
+                    <input type="range" class="time-slider" id="time-slider" min="0" max="23" value="8">
+                    <div class="time-labels">
+                        <span>12 AM</span>
+                        <span>6 AM</span>
+                        <span>12 PM</span>
+                        <span>6 PM</span>
+                        <span>11 PM</span>
+                    </div>
+                    <div class="time-quick-btns">
+                        <button class="time-quick-btn" data-hour="7">🌅 7AM</button>
+                        <button class="time-quick-btn active" data-hour="9">🚗 9AM</button>
+                        <button class="time-quick-btn" data-hour="13">☀️ 1PM</button>
+                        <button class="time-quick-btn" data-hour="18">🌆 6PM</button>
+                        <button class="time-quick-btn" data-hour="22">🌙 10PM</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Road Closure -->
             <div class="panel">
                 <h3><i class="fas fa-road"></i> Road Closure Test</h3>
@@ -165,6 +241,15 @@
                 <button class="btn btn-danger" id="btn-clear-closures">
                     <i class="fas fa-trash"></i> Clear All
                 </button>
+            </div>
+
+            <!-- Removed Nodes (NEW!) -->
+            <div class="panel">
+                <h3><i class="fas fa-ban"></i> Removed Nodes</h3>
+                <p class="hint">Click on nodes to remove/restore them</p>
+                <div class="removed-nodes-list" id="removed-nodes-list">
+                    <p class="empty-message">No nodes removed</p>
+                </div>
             </div>
 
             <!-- Statistics -->

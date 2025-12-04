@@ -1,8 +1,174 @@
-# GNN - Digital City Simulation with Traffic Modeling & ML Predictions
+# 🌆 GNN Digital Twin City Simulation
 
-A **Graph Attention Network (GATv2)** based digital city simulation featuring realistic urban environments, multi-modal transportation networks, advanced macroscopic traffic simulation, and **AI-powered traffic congestion prediction**. The project creates organic city structures with integrated metro systems, traffic congestion modeling, interactive visualization, and a trained ML model for real-time predictions.
+**A complete urban simulation platform featuring Graph Attention Networks (GATv2), realistic traffic modeling, interactive visualization, and AI-powered traffic prediction.**
 
-## 🌆 Overview
+> **📘 Complete documentation consolidated in [README_MASTER.md](README_MASTER.md)**
+
+[![Python 3.13+](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.6+](https://img.shields.io/badge/PyTorch-2.6+-red.svg)](https://pytorch.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
+
+---
+
+## 🚀 Quick Start (30 seconds)
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install torch-geometric torch-scatter torch-sparse
+
+# 2. Start the application
+python backend/app.py
+
+# 3. Open browser
+# http://localhost:5000
+```
+
+---
+
+## ✨ Key Features
+
+- 🤖 **AI Traffic Prediction**: GATv2 model with 115,841 parameters
+- 🏙️ **Realistic City**: 796 nodes, 4,676 edges, organic layout
+- 🚇 **Multi-Modal Transport**: 3 metro lines + road network
+- 🎮 **Interactive Control**: Remove nodes, close roads, analyze impact
+- 🌐 **Web Interface**: Real-time visualization with Leaflet.js
+- 📊 **What-If Analysis**: Test scenarios before implementation
+- 🆕 **Node Removal & Impact Analysis**: Comprehensive infrastructure planning
+
+---
+
+## 📖 Documentation
+
+**For complete documentation, see [README_MASTER.md](README_MASTER.md) which includes:**
+
+| Section | Details |
+|---------|---------|
+| **System Overview** | Architecture, technology stack, core concepts |
+| **Installation** | Step-by-step setup with all dependencies |
+| **Quick Start** | Get running in minutes |
+| **Usage Guide** | Training, testing, web interface |
+| **API Reference** | All REST endpoints with examples |
+| **Advanced Features** | Node removal, what-if analysis, interpretability |
+| **Troubleshooting** | Common issues and solutions |
+| **Performance** | Benchmarks and optimization tips |
+| **Contributing** | How to contribute to the project |
+
+---
+
+## 📁 Project Structure
+
+```
+├── backend/
+│   ├── app.py                 # Flask REST API
+│   └── requirements.txt        # Backend dependencies
+├── frontend/
+│   ├── index.html            # Main interface
+│   ├── app.js                # Frontend logic
+│   └── style.css             # Styling
+├── gnn_model.py              # GATv2 architecture
+├── train_model.py            # Training script
+├── test_trained_model.py     # Model testing
+├── manual_model_test.py      # Interactive analysis
+├── city_graph.graphml        # Infrastructure graph
+├── trained_gnn.pt            # Model weights
+└── README_MASTER.md          # Complete documentation
+```
+
+---
+
+## 🎯 Common Tasks
+
+### Train the Model
+```bash
+python train_model.py
+```
+Expected time: ~23 minutes on RTX 3050
+
+### Test the Model
+```bash
+python test_trained_model.py
+```
+
+### Interactive What-If Analysis
+```bash
+python manual_model_test.py
+```
+
+---
+
+## 📊 Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| **Network Scale** | 796 nodes, 4,676 edges |
+| **Model Size** | 115,841 parameters |
+| **Training Time** | 23.1 minutes (RTX 3050) |
+| **Accuracy** | 61.73 MSE validation loss |
+| **Prediction Speed** | 100-500ms per analysis |
+| **Metro Coverage** | 3 lines, 24 stations |
+
+---
+
+## 🆕 Node Removal & Impact Analysis
+
+New feature for infrastructure planning:
+
+```
+1. Click any node on map
+2. Click "Remove Node" button
+3. System shows:
+   - Closed edges
+   - Traffic impact analysis
+   - Network-wide congestion
+4. Click "Restore" to undo
+```
+
+**Use cases**: Metro planning, hospital accessibility, road maintenance, disaster recovery
+
+---
+
+## 🐛 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Model not found | Run `python train_model.py` |
+| GPU not detected | Check CUDA installation |
+| API connection failed | Ensure backend running on localhost:5000 |
+| Slow predictions | Reduce batch size in training config |
+
+**For more troubleshooting, see [README_MASTER.md](README_MASTER.md#-troubleshooting)**
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes
+4. Push to branch
+5. Open Pull Request
+
+---
+
+## 📞 Support
+
+- 📖 **Docs**: [README_MASTER.md](README_MASTER.md)
+- 🐛 **Issues**: GitHub Issues
+- 💬 **Discussions**: GitHub Discussions
+- 📧 **Email**: Contact project maintainers
+
+---
+
+## 📝 License
+
+MIT License - see LICENSE file for details
+
+---
+
+## 🎯 System Overview
 
 This project simulates a digital city modeled after Pune, India, featuring:
 - **Complex graph-based urban infrastructure** with 796 nodes and 4,676+ edges
@@ -11,43 +177,15 @@ This project simulates a digital city modeled after Pune, India, featuring:
 - **Interactive traffic control** - block roads, simulate events, track statistics
 - **Real-time visualization** - Interactive web maps with layer controls
 - **GNN training data generation** - Export scenarios for machine learning
-- **🆕 Trained GATv2 Model** - AI-powered traffic prediction (115,841 parameters)
-- **🆕 Manual Testing Interface** - Interactive what-if scenario analysis
-- **GPU Acceleration** - NVIDIA RTX 3050 optimized (23.1 min training)
+- **Trained GATv2 Model** - AI-powered traffic prediction (115,841 parameters)
+- **Manual Testing Interface** - Interactive what-if scenario analysis
+- **GPU Acceleration** - NVIDIA RTX 3050 optimized
 
-The simulation uses advanced graph algorithms and Poisson disk sampling to create realistic street networks that mimic organic city growth patterns, while the traffic model demonstrates how metro systems can ease urban congestion. The trained GNN model predicts congestion factors with 61.73 MSE validation loss.
+---
 
-## ✨ Features
+**Status**: 🟢 Production Ready | **Version**: 1.0 | **Last Updated**: December 3, 2025
 
-### 🤖 AI Traffic Prediction (NEW!)
-- **GATv2 Model**: Graph Attention Network with 4 heads, 3 layers, 64 hidden dims
-- **115,841 Parameters**: Highly efficient for real-time predictions
-- **Training**: 6,000 traffic snapshots, 50 epochs, 23.1 minutes on RTX 3050
-- **Accuracy**: Validation loss 61.73 MSE, predictions in 1.0-50.0 congestion range
-- **GPU Optimized**: NVIDIA CUDA 12.4 with PyTorch 2.6.0
-- **What-If Analysis**: Predict congestion changes before implementing changes
-- **Scenario Testing**: Test multiple road configurations and compare impacts
-
-### 🧪 Manual Testing Interface (NEW!)
-- **Interactive Menu**: Easy navigation with 5 testing modes
-- **Quick Test**: Modify single roads and see real-time impact
-- **Scenario Test**: Create complex multi-road modifications
-- **Batch Testing**: Run multiple snapshots and get statistics
-- **Scenario Compare**: Pre-defined scenario comparisons (Red vs Blue line impact)
-- **Model Analysis**: Understand network features and predictions
-- **Export Results**: Save analysis to pickle files
-
-### 🏙️ City Generation
-- **Organic Network Structure**: Uses Delaunay triangulation + Poisson disk sampling
-- **Better Node Distribution**: Minimum spacing constraints prevent clustering (75% wider coverage)
-- **Multi-Zone Urban Structure**: 
-  - 🏙️ Downtown (city center)
-  - 🏡 Residential areas
-  - 🏘️ Suburbs
-  - 🏭 Industrial zones
-- **Civic Amenities**: 15 hospitals strategically placed
-- **Green Zones**: 30 parks distributed with angle diversity
-- **GPS Coordinates**: Real-world coordinates based on Pune, India (18.5204°N, 73.8567°E)
+**➡️ [See complete documentation →](README_MASTER.md)**
 
 ### 🚇 Metro Network (NEW!)
 - **3 Metro Lines**: Red (East-West), Blue (North-South), Green (Diagonal)

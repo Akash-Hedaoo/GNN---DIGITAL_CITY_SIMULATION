@@ -9,7 +9,8 @@ const state = {
     closedRoads: [],
     baseline: null,
     withClosures: null,
-    pieChart: null
+    pieChart: null,
+    theme: 'dark'
 };
 
 // ============================================
@@ -19,6 +20,12 @@ const state = {
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+    // Load theme from localStorage (synced with index.html)
+    loadTheme();
+    
+    // Setup theme toggle
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
     // Load closed roads from localStorage
     loadFromMapPage();
     
@@ -28,6 +35,39 @@ async function init() {
     // Auto-run only if we need to fetch data
     if (state.closedRoads.length > 0 && !state.baseline) {
         runAnalysis();
+    }
+}
+
+// ============================================
+// THEME MANAGEMENT
+// ============================================
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('citySimTheme') || 'dark';
+    state.theme = savedTheme;
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', state.theme);
+    localStorage.setItem('citySimTheme', state.theme);
+    
+    // Update charts if they exist (for proper colors)
+    if (state.pieChart) {
+        updateChartColors();
+    }
+    
+    showToast(`Switched to ${state.theme} theme`, 'info');
+}
+
+function updateChartColors() {
+    // Update chart text colors based on theme
+    const textColor = state.theme === 'light' ? '#2c3e50' : '#ffffff';
+    
+    if (state.pieChart) {
+        state.pieChart.options.plugins.legend.labels.color = textColor;
+        state.pieChart.update();
     }
 }
 
@@ -218,6 +258,9 @@ function updateCongestionChart(veryHigh, high, medium, low, veryLow) {
         state.pieChart.destroy();
     }
     
+    // Get text color based on theme
+    const textColor = state.theme === 'light' ? '#2c3e50' : '#ffffff';
+    
     state.pieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -232,7 +275,13 @@ function updateCongestionChart(veryHigh, high, medium, low, veryLow) {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: { display: false }
+                legend: { 
+                    display: false 
+                },
+                tooltip: {
+                    bodyColor: textColor,
+                    titleColor: textColor
+                }
             },
             cutout: '60%'
         }
