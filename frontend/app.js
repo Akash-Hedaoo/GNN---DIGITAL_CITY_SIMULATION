@@ -1002,6 +1002,26 @@ function updatePredictionVisualization() {
         predMap[`${p.source}-${p.target}`] = p.congestion;
     });
     
+    // DEBUG: Log to verify data
+    console.log('=== updatePredictionVisualization DEBUG ===');
+    console.log('Predictions count:', predictions.length);
+    console.log('Edges count:', state.graphData.edges.length);
+    console.log('Sample prediction keys:', Object.keys(predMap).slice(0, 5));
+    console.log('Sample edge keys:', state.graphData.edges.slice(0, 5).map(e => `${e.source}-${e.target}`));
+    
+    // Count edges with _polyline
+    let withPolyline = 0, withoutPolyline = 0, matched = 0, unmatched = 0;
+    state.graphData.edges.forEach(edge => {
+        if (edge._polyline) withPolyline++;
+        else withoutPolyline++;
+        
+        const key = `${edge.source}-${edge.target}`;
+        if (predMap[key] !== undefined) matched++;
+        else unmatched++;
+    });
+    console.log(`Edges with _polyline: ${withPolyline}, without: ${withoutPolyline}`);
+    console.log(`Keys matched: ${matched}, unmatched: ${unmatched}`);
+
     // Build baseline map for comparison (only if we have closed roads)
     const baselineMap = {};
     const hasClosures = state.closedRoads.size > 0;
@@ -1009,10 +1029,15 @@ function updatePredictionVisualization() {
     if (state.baselinePredictions && hasClosures) {
         state.baselinePredictions.predictions.forEach(p => {
             baselineMap[`${p.source}-${p.target}`] = p.congestion;
+            // Also add reverse direction
+            baselineMap[`${p.target}-${p.source}`] = p.congestion;
         });
     }
     
-    // Calculate percentiles for congestion levels
+    // Also add reverse keys to predMap for undirected matching
+    predictions.forEach(p => {
+        predMap[`${p.target}-${p.source}`] = p.congestion;
+    });    // Calculate percentiles for congestion levels
     const congestionValues = predictions.map(p => p.congestion);
     const sorted = [...congestionValues].sort((a, b) => a - b);
     const p20 = sorted[Math.floor(sorted.length * 0.20)];
@@ -1023,6 +1048,7 @@ function updatePredictionVisualization() {
     // Track changed edges
     let increasedCount = 0;
     let decreasedCount = 0;
+    let coloredCount = 0;  // Track how many edges get colored
     
     state.graphData.edges.forEach(edge => {
         if (!edge._polyline) return;
@@ -1042,7 +1068,9 @@ function updatePredictionVisualization() {
             color = '#ff69b4';
             weight = 5;
             dashArray = '12, 6';
+            coloredCount++;
         } else if (congestion !== undefined) {
+            coloredCount++;
             // Color based on absolute congestion level (5 levels)
             if (congestion >= p80) {
                 // Very High - Dark Red
@@ -1076,6 +1104,13 @@ function updatePredictionVisualization() {
         
         edge._polyline.setStyle({ color: color, weight: weight, dashArray: dashArray });
     });
+    
+    console.log(`Colored ${coloredCount} edges based on congestion`);
+    
+    // Force refresh the roads layer to ensure colors are visible
+    if (state.layers.roads && state.visible.roads) {
+        state.layers.roads.bringToFront();
+    }
     
     if (hasClosures) {
         console.log(`Traffic redistribution: ${increasedCount} roads got busier, ${decreasedCount} roads got less busy`);
