@@ -167,6 +167,10 @@ def index():
 def results():
     return render_template('results.html')
 
+@app.route('/maps')
+def dual_maps():
+    return render_template('results-map.html')
+
 @app.route('/api/graph-data')
 def get_graph_data():
     """Get graph nodes and edges with coordinates"""
@@ -295,6 +299,7 @@ def simulate_closure():
     # Calculate impact metrics
     deltas = []
     impacted_edges = []
+    all_edges_impact = []
     
     for key, new_val in new_predictions.items():
         base_val = twin.baseline_predictions.get(key, 1.0)
@@ -302,14 +307,26 @@ def simulate_closure():
         pct_change = (diff / base_val) * 100 if base_val > 0 else 0
         deltas.append(diff)
         
+        u, v, k = key
+        edge_id = f"{u}_{v}_{k}"
+        edge_data = {
+            'edge_id': edge_id,
+            'source_node': str(u),
+            'target_node': str(v),
+            'key': k,
+            'baseline_congestion': float(base_val),
+            'current_congestion': float(new_val),
+            'congestion': float(new_val),
+            'change': float(diff),
+            'pct_change': float(pct_change)
+        }
+        all_edges_impact.append(edge_data)
+        
         if abs(pct_change) > 2.0:  # Significant impact
-            edge_id = f"{key[0]}_{key[1]}_{key[2]}"
-            impacted_edges.append({
-                'edge_id': edge_id,
-                'congestion': float(new_val),
-                'change': float(diff),
-                'pct_change': float(pct_change)
-            })
+            impacted_edges.append(edge_data)
+    
+    # Sort by percentage change to get top 5 critical edges
+    top_5_critical = sorted(all_edges_impact, key=lambda x: abs(x['pct_change']), reverse=True)[:5]
     
     avg_new = np.mean(list(new_predictions.values()))
     avg_base = np.mean(list(twin.baseline_predictions.values()))
@@ -323,6 +340,7 @@ def simulate_closure():
             'peak_bottleneck_spike': float(max(deltas)) if deltas else 0.0,
             'avg_congestion': float(avg_new)
         },
+        'top_5_critical_edges': top_5_critical,
         'impacted_edges': impacted_edges[:100]  # Limit to top 100
     })
 

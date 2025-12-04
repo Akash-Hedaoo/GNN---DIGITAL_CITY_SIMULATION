@@ -11,7 +11,10 @@
     <div class="container">
         <header>
             <h1>📊 Simulation Results</h1>
-            <a href="/" class="btn btn-secondary">← Back to Map</a>
+            <div class="header-buttons">
+                <a href="/maps" class="btn btn-primary">📍 View Side-by-Side Maps</a>
+                <a href="/" class="btn btn-secondary">← Back to Map</a>
+            </div>
         </header>
 
         <div class="results-container">
@@ -38,6 +41,14 @@
                         <div class="metric-value" id="avgCongestion">--</div>
                         <div class="metric-unit">factor</div>
                     </div>
+                </div>
+            </div>
+
+            <div class="impact-list">
+                <h2>🚨 Top 5 Critical Edges</h2>
+                <p class="top-5-subtitle">Road segments with the largest increase in travel time or highest absolute predicted congestion</p>
+                <div id="top5EdgesList" class="top-5-edges">
+                    <!-- Dynamically populated -->
                 </div>
             </div>
 

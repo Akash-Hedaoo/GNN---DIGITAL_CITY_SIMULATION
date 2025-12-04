@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side-by-Side Map Comparison - GNN Traffic Analysis</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/results-map.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📍 Side-by-Side Map Comparison</h1>
+            <p>Compare baseline congestion vs. predicted congestion from scenario analysis</p>
+        </header>
+
+        <div class="map-controls">
+            <div class="sync-control">
+                <input type="checkbox" id="syncToggle" checked>
+                <label for="syncToggle">🔗 Synchronized Pan & Zoom</label>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="legend-color" style="background: #00ff00;"></span>
+                    <span>Low (1.0-2.0)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: #ffff00;"></span>
+                    <span>Moderate (2.0-3.0)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: #ff8800;"></span>
+                    <span>High (3.0-5.0)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: #ff0000;"></span>
+                    <span>Severe (5.0+)</span>
+                </div>
+            </div>
+            <a href="/results" class="btn btn-secondary">← Back to Results</a>
+        </div>
+
+        <div class="maps-container">
+            <div class="map-wrapper">
+                <div class="map-header">
+                    <h2>Baseline Traffic</h2>
+                    <p class="map-subtitle">Historical congestion data</p>
+                </div>
+                <div id="baselineMap" class="map-dual"></div>
+            </div>
+            
+            <div class="map-wrapper">
+                <div class="map-header">
+                    <h2>Prediction Traffic</h2>
+                    <p class="map-subtitle">GNN prediction after scenario</p>
+                </div>
+                <div id="predictionMap" class="map-dual"></div>
+            </div>
+        </div>
+
+        <div class="map-info-panel">
+            <div class="info-box">
+                <h3>Map Synchronization</h3>
+                <p>When "Synchronized Pan & Zoom" is enabled, both maps will move together when you pan or zoom. This makes it easier to compare traffic patterns across the same areas.</p>
+            </div>
+            <div class="info-box">
+                <h3>Color Legend</h3>
+                <p>Roads are colored based on their congestion factor (ratio of current to baseline travel time). Hover over any road to see detailed congestion metrics.</p>
+            </div>
+        </div>
+
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <p>Loading maps...</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='js/results-map.js') }}"></script>
+</body>
+</html>

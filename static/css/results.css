@@ -5,6 +5,20 @@
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .metrics-panel {
     margin-bottom: 30px;
 }
@@ -123,5 +137,141 @@
     border: 1px solid #ddd;
     border-radius: 5px;
     background: white;
+}
+
+/* Top 5 Critical Edges Styling */
+.top-5-subtitle {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 15px;
+    font-style: italic;
+}
+
+.top-5-edges {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 15px;
+}
+
+.critical-edge-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border: 2px solid #e74c3c;
+    border-radius: 8px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.critical-edge-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(231, 76, 60, 0.2);
+}
+
+.critical-edge-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #e74c3c, #c0392b);
+}
+
+.critical-edge-rank {
+    display: inline-block;
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.critical-edge-nodes {
+    font-size: 14px;
+    color: #2c3e50;
+    font-weight: 600;
+    margin-bottom: 12px;
+    line-height: 1.6;
+    padding: 10px;
+    background: rgba(44, 62, 80, 0.05);
+    border-radius: 4px;
+    border-left: 3px solid #3498db;
+}
+
+.critical-edge-congestion {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.congestion-metric {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    border-left: 3px solid #95a5a6;
+}
+
+.congestion-metric.baseline {
+    border-left-color: #3498db;
+}
+
+.congestion-metric.current {
+    border-left-color: #e74c3c;
+}
+
+.congestion-label {
+    font-size: 12px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.congestion-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.congestion-metric.baseline .congestion-value {
+    color: #3498db;
+}
+
+.congestion-metric.current .congestion-value {
+    color: #e74c3c;
+}
+
+.critical-edge-change {
+    background: white;
+    padding: 12px;
+    border-radius: 4px;
+    text-align: center;
+    border: 2px solid #e74c3c;
+}
+
+.change-percentage {
+    font-size: 24px;
+    font-weight: bold;
+    color: #e74c3c;
+    margin-bottom: 4px;
+}
+
+.change-label {
+    font-size: 12px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.change-amount {
+    font-size: 14px;
+    color: #2c3e50;
+    margin-top: 6px;
+    font-weight: 600;
 }
 

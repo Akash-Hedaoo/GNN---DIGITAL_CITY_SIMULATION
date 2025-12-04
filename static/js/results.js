@@ -15,6 +15,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display metrics
     displayMetrics(results.metrics);
     
+    // Display top 5 critical edges
+    if (results.top_5_critical_edges && results.top_5_critical_edges.length > 0) {
+        displayTop5CriticalEdges(results.top_5_critical_edges);
+    }
+    
     // Display impacted edges
     displayImpactedEdges(results.impacted_edges);
     
@@ -43,6 +48,65 @@ function displayMetrics(metrics) {
     } else {
         netChangeEl.style.color = '#27ae60'; // Green for decrease
     }
+}
+
+// Display top 5 critical edges
+function displayTop5CriticalEdges(criticalEdges) {
+    const container = document.getElementById('top5EdgesList');
+    container.innerHTML = '';
+    
+    if (criticalEdges.length === 0) {
+        container.innerHTML = '<p style="padding: 20px; text-align: center; color: #7f8c8d;">No critical edges found.</p>';
+        return;
+    }
+    
+    criticalEdges.forEach((edge, index) => {
+        const rankNum = index + 1;
+        const card = document.createElement('div');
+        card.className = 'critical-edge-card';
+        
+        // Calculate percentage change
+        const baselineValue = edge.baseline_congestion || edge.congestion;
+        const currentValue = edge.current_congestion || edge.congestion;
+        const percentageChange = edge.pct_change || 0;
+        
+        // Format node references
+        const sourceNode = edge.source_node || edge.edge_id.split('_')[0];
+        const targetNode = edge.target_node || edge.edge_id.split('_')[1];
+        
+        // Determine color based on percentage change
+        const isIncrease = percentageChange > 0;
+        const changeSymbol = isIncrease ? '+' : '';
+        
+        card.innerHTML = `
+            <div class="critical-edge-rank">#${rankNum} Critical Bottleneck</div>
+            <div class="critical-edge-nodes">
+                <strong>Road Segment:</strong><br>
+                Node ${sourceNode} → Node ${targetNode}
+            </div>
+            <div class="critical-edge-congestion">
+                <div class="congestion-metric baseline">
+                    <div class="congestion-label">Baseline</div>
+                    <div class="congestion-value">${baselineValue.toFixed(2)}x</div>
+                </div>
+                <div class="congestion-metric current">
+                    <div class="congestion-label">Current</div>
+                    <div class="congestion-value">${currentValue.toFixed(2)}x</div>
+                </div>
+            </div>
+            <div class="critical-edge-change">
+                <div class="change-percentage" style="color: ${isIncrease ? '#e74c3c' : '#27ae60'}">
+                    ${changeSymbol}${percentageChange.toFixed(1)}%
+                </div>
+                <div class="change-label">Congestion Change</div>
+                <div class="change-amount">
+                    Increase: ${(currentValue - baselineValue).toFixed(2)}x
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
 }
 
 // Display impacted edges list
