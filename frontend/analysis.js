@@ -73,9 +73,19 @@ function updateChartColors() {
 
 function loadFromMapPage() {
     const saved = localStorage.getItem('cityAnalysisData');
+    console.log('📦 Loading analysis data from localStorage:', saved ? 'Found' : 'Not found');
+    
     if (saved) {
         try {
             const data = JSON.parse(saved);
+            console.log('📊 Parsed analysis data:', {
+                closedRoads: data.closedRoads?.length,
+                hasBaseline: !!data.baseline,
+                hasWithClosures: !!data.withClosures,
+                baselinePredictions: data.baseline?.predictions?.length,
+                withClosuresPredictions: data.withClosures?.predictions?.length
+            });
+            
             state.closedRoads = data.closedRoads || [];
             state.baseline = data.baseline;
             state.withClosures = data.withClosures;
@@ -85,10 +95,17 @@ function loadFromMapPage() {
             if (state.baseline && state.withClosures) {
                 console.log('📊 Data loaded from map page, running analysis...');
                 setTimeout(() => analyzeResults(), 100);
+            } else {
+                console.warn('⚠️ Missing baseline or withClosures data. Please run prediction from map first.');
+                showToast('No prediction data found. Please run prediction from the map page first.', 'error');
             }
         } catch (e) {
             console.error('Failed to parse analysis data:', e);
+            showToast('Failed to load analysis data', 'error');
         }
+    } else {
+        console.warn('⚠️ No analysis data in localStorage');
+        showToast('No analysis data found. Please block roads and run prediction from the map page.', 'info');
     }
 }
 
@@ -216,11 +233,18 @@ function analyzeResults() {
         
         allRoads.push({ road: key, congestion, baseline, diff, level });
         
-        // More sensitive change detection (0.1 threshold for raw values, 0.01 for normalized)
-        const changeThreshold = congestion > 1 ? 0.1 : 0.01;
-        if (diff > changeThreshold) increased++;
-        else if (diff < -changeThreshold) decreased++;
-        else unchanged++;
+        // Use percentage-based change detection for more accurate comparison
+        // If the difference is less than 1% of the baseline, consider it unchanged
+        const percentChange = baseline > 0 ? Math.abs(diff / baseline) * 100 : (diff === 0 ? 0 : 100);
+        
+        if (percentChange < 1) {
+            // Less than 1% change = unchanged
+            unchanged++;
+        } else if (diff > 0) {
+            increased++;
+        } else {
+            decreased++;
+        }
     }
     
     console.log(`📈 Impact: ${increased} increased, ${decreased} decreased, ${unchanged} unchanged`);
