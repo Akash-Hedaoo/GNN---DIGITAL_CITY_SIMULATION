@@ -280,13 +280,53 @@ function setupEventListeners() {
         reopenRoadBtn.addEventListener('click', handleReopenRoad);
     }
     
-    // Layer toggle checkboxes - FIX: These were missing!
+    // Layer toggle checkboxes
     const layerRoads = document.getElementById('layer-roads');
     if (layerRoads) {
         layerRoads.addEventListener('change', (e) => {
             state.visible.roads = e.target.checked;
             updateLayerVisibility();
         });
+    }
+    
+    const layerMetro = document.getElementById('layer-metro');
+    if (layerMetro) {
+        layerMetro.addEventListener('change', (e) => {
+            state.visible.metro = e.target.checked;
+            updateLayerVisibility();
+        });
+    }
+    
+    const layerNodes = document.getElementById('layer-nodes');
+    if (layerNodes) {
+        layerNodes.addEventListener('change', (e) => {
+            state.visible.nodes = e.target.checked;
+            updateLayerVisibility();
+        });
+    }
+    
+    const layerAmenities = document.getElementById('layer-amenities');
+    if (layerAmenities) {
+        layerAmenities.addEventListener('change', (e) => {
+            state.visible.amenities = e.target.checked;
+            updateLayerVisibility();
+        });
+    }
+    
+    // Road closure buttons
+    const btnRandomClose = document.getElementById('btn-random-close');
+    if (btnRandomClose) {
+        btnRandomClose.addEventListener('click', randomCloseRoads);
+    }
+    
+    const btnRandomOpen = document.getElementById('btn-random-open');
+    if (btnRandomOpen) {
+        btnRandomOpen.addEventListener('click', randomOpenRoads);
+    }
+    
+    const btnClearClosures = document.getElementById('btn-clear-closures');
+    if (btnClearClosures) {
+        btnClearClosures.addEventListener('click', clearClosures);
     }
     
     // Analysis button
@@ -901,10 +941,10 @@ function renderGraph() {
     });
     
     // Create layer groups
-    state.layers.roads = L.layerGroup();
-    state.layers.metro = L.layerGroup();
-    state.layers.nodes = L.layerGroup();
-    state.layers.amenities = L.layerGroup();
+    state.layers.roads = L.featureGroup();
+    state.layers.metro = L.featureGroup();
+    state.layers.nodes = L.featureGroup();
+    state.layers.amenities = L.featureGroup();
     
     // Render edges
     edges.forEach(edge => {
@@ -948,7 +988,9 @@ function renderGraph() {
             color: color,
             weight: weight,
             opacity: isMetro ? 0.9 : 0.7,
-            dashArray: dashArray
+            dashArray: dashArray,
+            interactive: true,
+            bubblingMouseEvents: false
         });
         
         // Store edge data for CTM updates
@@ -960,7 +1002,11 @@ function renderGraph() {
         
         // Add click handler for road closure (not for metro)
         if (!isMetro) {
-            polyline.on('click', () => toggleRoadClosure(edge));
+            polyline.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);  // Prevent map click
+                console.log('Road clicked:', edge.source, '->', edge.target);
+                toggleRoadClosure(edge);
+            });
             polyline.on('mouseover', function() {
                 this.setStyle({ weight: weight + 2, opacity: 1 });
             });
@@ -1244,9 +1290,18 @@ function updatePredictionVisualization() {
 
 async function toggleRoadClosure(edge) {
     const roadId = `${edge.source}-${edge.target}`;
+    console.log('toggleRoadClosure called for:', roadId);
+    console.log('edge._polyline exists:', !!edge._polyline);
+    
+    if (!edge._polyline) {
+        console.error('No polyline reference for edge!');
+        showToast('Error: Cannot toggle road', 'error');
+        return;
+    }
     
     if (state.closedRoads.has(roadId)) {
         // Reopen the road
+        console.log('Reopening road:', roadId);
         try {
             const response = await fetch(`${CONFIG.API_BASE}/ctm/reopen-road`, {
                 method: 'POST',
@@ -1254,11 +1309,12 @@ async function toggleRoadClosure(edge) {
                 body: JSON.stringify({ source: edge.source, target: edge.target })
             });
             const data = await response.json();
+            console.log('Reopen response:', data);
             if (data.error) {
                 console.warn('CTM reopen-road:', data.error);
             }
         } catch (e) {
-            console.warn('CTM not active, updating UI only');
+            console.warn('CTM not active, updating UI only:', e);
         }
         
         state.closedRoads.delete(roadId);
@@ -1270,6 +1326,7 @@ async function toggleRoadClosure(edge) {
         showToast(`Opened road: ${roadId}`, 'info');
     } else {
         // Close the road
+        console.log('Closing road:', roadId);
         try {
             const response = await fetch(`${CONFIG.API_BASE}/ctm/close-road`, {
                 method: 'POST',
@@ -1277,11 +1334,12 @@ async function toggleRoadClosure(edge) {
                 body: JSON.stringify({ source: edge.source, target: edge.target })
             });
             const data = await response.json();
+            console.log('Close response:', data);
             if (data.error) {
                 console.warn('CTM close-road:', data.error);
             }
         } catch (e) {
-            console.warn('CTM not active, updating UI only');
+            console.warn('CTM not active, updating UI only:', e);
         }
         
         state.closedRoads.add(roadId);
@@ -1334,10 +1392,87 @@ function removeClosedRoad(roadId) {
 }
 
 function clearClosures() {
-    state.closedRoads.forEach(roadId => removeClosedRoad(roadId));
+    // Reset all closed roads visually
+    state.closedRoads.forEach(roadId => {
+        const edge = state.graphData.edges.find(e => 
+            `${e.source}-${e.target}` === roadId
+        );
+        if (edge && edge._polyline) {
+            edge._polyline.setStyle({
+                color: CONFIG.COLORS.road,
+                weight: 2,
+                dashArray: null
+            });
+        }
+    });
     state.closedRoads.clear();
     updateClosedRoadsList();
     showToast('All road closures cleared', 'info');
+}
+
+// Random close roads
+async function randomCloseRoads() {
+    if (!state.graphData || !state.graphData.edges) {
+        showToast('Graph not loaded', 'error');
+        return;
+    }
+    
+    const countInput = document.getElementById('random-road-count');
+    const count = parseInt(countInput?.value || '1');
+    
+    // Get only road edges (not metro)
+    const roadEdges = state.graphData.edges.filter(e => {
+        const isMetro = e.edge_type === 'metro' || e.is_metro;
+        const roadId = `${e.source}-${e.target}`;
+        return !isMetro && !state.closedRoads.has(roadId);
+    });
+    
+    if (roadEdges.length === 0) {
+        showToast('No open roads available to close', 'warning');
+        return;
+    }
+    
+    // Pick random roads
+    const toClose = [];
+    const shuffled = [...roadEdges].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < Math.min(count, shuffled.length); i++) {
+        toClose.push(shuffled[i]);
+    }
+    
+    // Close each road
+    for (const edge of toClose) {
+        await toggleRoadClosure(edge);
+    }
+    
+    showToast(`Closed ${toClose.length} random road(s)`, 'success');
+}
+
+// Random open roads
+async function randomOpenRoads() {
+    if (state.closedRoads.size === 0) {
+        showToast('No roads are closed', 'warning');
+        return;
+    }
+    
+    const countInput = document.getElementById('random-road-count');
+    const count = parseInt(countInput?.value || '1');
+    
+    // Get closed road IDs
+    const closedIds = Array.from(state.closedRoads);
+    const shuffled = closedIds.sort(() => Math.random() - 0.5);
+    const toOpen = shuffled.slice(0, Math.min(count, shuffled.length));
+    
+    // Open each road
+    for (const roadId of toOpen) {
+        const edge = state.graphData.edges.find(e => 
+            `${e.source}-${e.target}` === roadId
+        );
+        if (edge) {
+            await toggleRoadClosure(edge);
+        }
+    }
+    
+    showToast(`Opened ${toOpen.length} random road(s)`, 'success');
 }
 
 // NEW: Remove a node from the simulation
