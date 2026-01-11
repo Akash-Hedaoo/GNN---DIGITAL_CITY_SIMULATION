@@ -117,27 +117,27 @@ class CTMSnapshot:
 
 @dataclass
 class CTMConfig:
-    cell_length_km: float = 1.0  # Increased from 0.5 to reduce cell count (2x faster)
+    cell_length_km: float = 500.0  # Cell length in same units as graph (meters)
     time_step_hours: float = 1.0 / 60.0  # 1 minute
     
-    # Traffic parameters
-    default_free_flow_speed: float = 60.0
-    default_backward_wave_speed: float = 20.0
-    default_jam_density: float = 150.0
-    default_max_flow: float = 2000.0
+    # Traffic parameters (adjusted for meters)
+    default_free_flow_speed: float = 60000.0  # 60 km/h in meters/hour
+    default_backward_wave_speed: float = 20000.0  # 20 km/h in meters/hour
+    default_jam_density: float = 0.15  # vehicles/meter/lane
+    default_max_flow: float = 2000.0  # vehicles/hour/lane
     
     # Metro parameters
-    metro_free_flow_speed: float = 80.0
-    metro_jam_density: float = 300.0
-    metro_max_flow: float = 5000.0
+    metro_free_flow_speed: float = 80000.0  # 80 km/h in meters/hour
+    metro_jam_density: float = 0.3  # vehicles/meter/lane
+    metro_max_flow: float = 5000.0  # vehicles/hour/lane
     
     # Initial conditions
-    initial_density_ratio: float = 0.15  # 15% of jam density (reasonable starting traffic)
+    initial_density_ratio: float = 0.15  # 15% of jam density
     demand_generation_rate: float = 50.0  # vehicles/hour entering network
     closed_road_blocking: bool = True
     
     # Performance options
-    fast_mode: bool = False  # Skip expensive operations for faster init
+    fast_mode: bool = True  # Skip topology cache building for faster init
 
 
 class CTMTrafficSimulator:
@@ -154,7 +154,7 @@ class CTMTrafficSimulator:
     def __init__(self, graph: nx.MultiDiGraph, config: Optional[CTMConfig] = None):
         """Initialize CTM simulator"""
         start_time = time.time()
-        print("[CTM] 🚀 Starting initialization...")
+        print("[CTM] Starting initialization...", flush=True)
         
         # Use reference instead of copy - much faster
         # We don't modify graph structure, only read it
@@ -177,7 +177,7 @@ class CTMTrafficSimulator:
         # Ultra-fast cell lookup map (cell_id -> cell object)
         self._cell_map: Dict[Tuple[int, int, int, int], CTMCell] = {}
         
-        print(f"[CTM] 📊 Graph: {self.G.number_of_nodes()} nodes, {self.G.number_of_edges()} edges")
+        print(f"[CTM] Graph: {self.G.number_of_nodes()} nodes, {self.G.number_of_edges()} edges", flush=True)
         
         self._discretize_network()
         self._initialize_traffic()
@@ -186,17 +186,17 @@ class CTMTrafficSimulator:
         if not self.config.fast_mode:
             self._build_topology_cache()
         else:
-            print("[CTM] ⚡ Fast mode: Skipping topology cache (will build on-demand)")
+            print("[CTM] Fast mode: Skipping topology cache (will build on-demand)", flush=True)
         
         self._build_cell_map()
         
         elapsed = time.time() - start_time
-        print(f"[CTM] ✅ Initialized in {elapsed:.2f}s")
-        print(f"   Total Cells: {sum(len(cells) for cells in self.cells.values())}")
+        print(f"[CTM] Initialized in {elapsed:.2f}s", flush=True)
+        print(f"   Total Cells: {sum(len(cells) for cells in self.cells.values())}", flush=True)
     
     def _discretize_network(self):
         """Discretize each edge into cells"""
-        print("[CTM] 🔨 Discretizing network into cells...")
+        print("[CTM] Discretizing network into cells...", flush=True)
         start = time.time()
         total_cells = 0
         metro_count = 0
@@ -250,14 +250,14 @@ class CTMTrafficSimulator:
                 road_count += 1
         
         elapsed = time.time() - start
-        print(f"   ✅ Discretization done in {elapsed:.2f}s")
-        print(f"   🚇 Metro edges: {metro_count}")
-        print(f"   🚗 Road edges: {road_count}")
-        print(f"   📦 Total cells created: {total_cells}")
+        print(f"   Discretization done in {elapsed:.2f}s", flush=True)
+        print(f"   Metro edges: {metro_count}", flush=True)
+        print(f"   Road edges: {road_count}", flush=True)
+        print(f"   Total cells created: {total_cells}", flush=True)
     
     def _initialize_traffic(self):
         """Initialize with baseline vehicle density"""
-        print("[CTM] 🚗 Initializing traffic density...")
+        print("[CTM] Initializing traffic density...", flush=True)
         start = time.time()
         vehicles_added = 0
         
@@ -276,12 +276,12 @@ class CTMTrafficSimulator:
         
         self.total_vehicles = vehicles_added
         elapsed = time.time() - start
-        print(f"   ✅ Traffic initialized in {elapsed:.2f}s")
-        print(f"   🚗 Initial vehicles: {self.total_vehicles:,}")
+        print(f"   Traffic initialized in {elapsed:.2f}s", flush=True)
+        print(f"   Initial vehicles: {self.total_vehicles:,}", flush=True)
     
     def _build_topology_cache(self):
         """Pre-compute successor/predecessor relationships for O(1) lookups"""
-        print("[CTM] 🔗 Building topology cache...")
+        print("[CTM] Building topology cache...", flush=True)
         cache_start = time.time()
         
         # OPTIMIZATION: Build node adjacency maps once to avoid repeated NetworkX queries
@@ -289,14 +289,14 @@ class CTMTrafficSimulator:
         node_successors = {}
         node_predecessors = {}
         
-        print("   Building node adjacency maps...")
+        print("   Building node adjacency maps...", flush=True)
         nodes_list = list(self.G.nodes())
         for idx, node in enumerate(nodes_list):
             node_successors[node] = list(self.G.successors(node))
             node_predecessors[node] = list(self.G.predecessors(node))
         
-        print(f"   Cached adjacency for {len(node_successors)} nodes")
-        print("   Building cell-level connections...")
+        print(f"   Cached adjacency for {len(node_successors)} nodes", flush=True)
+        print("   Building cell-level connections...", flush=True)
         
         # Now iterate through cells and use the pre-computed maps
         cell_count = 0
@@ -341,22 +341,22 @@ class CTMTrafficSimulator:
         
         cache_elapsed = time.time() - cache_start
         total_cached = len(self._successor_cache)
-        print(f"   ✅ Cached {total_cached:,} cell connections in {cache_elapsed:.2f}s")
+        print(f"   Cached {total_cached:,} cell connections in {cache_elapsed:.2f}s", flush=True)
     
     def _build_cell_map(self):
         """Build fast cell lookup map for O(1) access"""
-        print("[CTM] 🗺️ Building cell lookup map...")
+        print("[CTM] Building cell lookup map...", flush=True)
         for edge_id, edge_cells in self.cells.items():
             u, v, key = edge_id
             for i, cell in enumerate(edge_cells):
                 self._cell_map[(u, v, key, i)] = cell
-        print(f"   ✅ Mapped {len(self._cell_map):,} cells")
+        print(f"   Mapped {len(self._cell_map):,} cells", flush=True)
     
     def close_road(self, u: int, v: int, key: int = 0):
         """Close a road segment"""
         edge_id = (u, v, key)
         if edge_id not in self.cells:
-            print(f"[WARNING] Edge {edge_id} not found")
+            print(f"[WARNING] Edge {edge_id} not found", flush=True)
             return
         
         print(f"🚧 Closing road: {u} -> {v} (key={key})")
@@ -391,7 +391,7 @@ class CTMTrafficSimulator:
         step_start = time.time() if show_progress else None
         if show_progress:
             step_num = len(self.snapshots) + 1
-            print(f"[CTM] ⏱️ Step {step_num}: Flows → Densities → Demand")
+            print(f"[CTM] Step {step_num}: Flows -> Densities -> Demand")
         
         flows = self._calculate_flows()
         self._update_densities(flows, delta_t)
@@ -403,7 +403,7 @@ class CTMTrafficSimulator:
         
         if show_progress:
             elapsed = time.time() - step_start
-            print(f"[CTM] ✅ Step {len(self.snapshots)} done in {elapsed:.2f}s")
+            print(f"[CTM] Step {len(self.snapshots)} done in {elapsed:.2f}s")
     
     def _calculate_flows(self) -> Dict[Tuple[int, int, int, int], float]:
         """Calculate flows between cells using CTM equations (ULTRA-OPTIMIZED)"""

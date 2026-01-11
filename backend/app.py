@@ -12,6 +12,21 @@ Date: December 2025
 """
 
 from flask import Flask, jsonify, request, send_from_directory
+import sys
+
+# Ensure stdout handles UTF-8 properly on Windows
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+# Helper function for logging with immediate flush
+def log(msg):
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        # Fallback: strip non-ASCII chars
+        print(msg.encode('ascii', 'replace').decode(), flush=True)
+
 try:
     from flask_cors import CORS
 except Exception:
@@ -62,7 +77,7 @@ def init_model():
     
     try:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f"[INIT] Using device: {device}")
+        log(f"[INIT] Using device: {device}")
         
         model = TrafficGATv2(
             in_channels=4,
@@ -80,13 +95,13 @@ def init_model():
             model = model.to(device)
             model.eval()
             model_loaded = True
-            print("[OK] Model loaded successfully")
+            log("[OK] Model loaded successfully")
         else:
-            print(f"[WARN] Model not found at {model_path}")
+            log(f"[WARN] Model not found at {model_path}")
             model_loaded = False
             
     except Exception as e:
-        print(f"[ERROR] Failed to load model: {e}")
+        log(f"[ERROR] Failed to load model: {e}")
         model_loaded = False
 
 
@@ -102,13 +117,13 @@ def init_graph():
             if not isinstance(graph, nx.MultiDiGraph):
                 graph = nx.MultiDiGraph(graph)
             graph_loaded = True
-            print(f"[OK] Graph loaded: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
+            log(f"[OK] Graph loaded: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
         else:
-            print(f"[WARN] Graph not found at {graph_path}")
+            log(f"[WARN] Graph not found at {graph_path}")
             graph_loaded = False
             
     except Exception as e:
-        print(f"[ERROR] Failed to load graph: {e}")
+        log(f"[ERROR] Failed to load graph: {e}")
         graph_loaded = False
 
 
@@ -245,9 +260,11 @@ def predict_traffic():
         closed_roads = data.get('closed_roads', [])
         hour = data.get('hour', 8)  # Default to 8 AM
         
-        print(f"\n[PREDICT] Received prediction request")
-        print(f"   Closed roads: {closed_roads if closed_roads else 'None'}")
-        print(f"   Number of closures: {len(closed_roads)}")
+        log("")
+        log(f"[PREDICT] Received prediction request")
+        log(f"   Closed roads: {closed_roads if closed_roads else 'None'}")
+        log(f"   Number of closures: {len(closed_roads)}")
+        log(f"   Hour: {hour}")
         
         # Build node features and edge features
         node_to_idx = {n: i for i, n in enumerate(graph.nodes())}
@@ -316,11 +333,11 @@ def predict_traffic():
             'closed_roads': len(closed_roads)
         }
         
-        print(f"[PREDICT] Prediction complete:")
-        print(f"   Mean congestion: {stats['mean_congestion']:.3f}")
-        print(f"   Max congestion: {stats['max_congestion']:.3f}")
-        print(f"   Road mean: {stats['road_mean']:.3f}")
-        print(f"   Total predictions: {len(predictions)}")
+        log(f"[PREDICT] Prediction complete:")
+        log(f"   Mean congestion: {stats['mean_congestion']:.3f}")
+        log(f"   Max congestion: {stats['max_congestion']:.3f}")
+        log(f"   Road mean: {stats['road_mean']:.3f}")
+        log(f"   Total predictions: {len(predictions)}")
         
         return jsonify({
             'predictions': results,
@@ -328,6 +345,9 @@ def predict_traffic():
         })
         
     except Exception as e:
+        log(f"[PREDICT] ERROR: {e}")
+        import traceback
+        log(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
@@ -575,25 +595,41 @@ def ctm_initialize():
     """Initialize CTM simulator"""
     global ctm_simulator, ctm_initialized
     
+    log("")
+    log("="*60)
+    log("[CTM API] /api/ctm/initialize called")
+    log("="*60)
+    
     if not graph_loaded:
+        log("[CTM API] ERROR: Graph not loaded!")
         return jsonify({'error': 'Graph not loaded'}), 500
     
     try:
         data = request.json or {}
+        log(f"[CTM API] Config: {data}")
         
-        # Create config from request params
+        # Create config from request params - use larger cells for performance
+        # Note: Graph lengths are in METERS, so use 500m (0.5km equivalent) cells
         config = CTMConfig(
-            cell_length_km=data.get('cell_length_km', 0.5),
+            cell_length_km=data.get('cell_length_km', 500.0),  # 500 meters per cell
             time_step_hours=data.get('time_step_hours', 1.0/60.0),
-            initial_density_ratio=data.get('initial_density_ratio', 0.3),
-            demand_generation_rate=data.get('demand_generation_rate', 100.0)
+            initial_density_ratio=data.get('initial_density_ratio', 0.2),
+            demand_generation_rate=data.get('demand_generation_rate', 100.0),
+            fast_mode=True  # Enable fast mode
         )
+        
+        log("[CTM API] Initializing CTM simulator...")
         
         # Initialize CTM simulator
         ctm_simulator = CTMTrafficSimulator(graph, config)
         ctm_initialized = True
         
         stats = ctm_simulator.get_statistics()
+        
+        log(f"[CTM API] CTM initialized successfully!")
+        log(f"[CTM API] Total cells: {sum(len(cells) for cells in ctm_simulator.cells.values())}")
+        log("="*60)
+        log("")
         
         return jsonify({
             'status': 'initialized',
@@ -608,6 +644,9 @@ def ctm_initialize():
         })
         
     except Exception as e:
+        log(f"[CTM API] ERROR: {e}")
+        import traceback
+        log(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
@@ -641,29 +680,50 @@ def ctm_step():
     """Advance CTM simulation by one or more steps"""
     global ctm_simulator, ctm_initialized
     
+    log("[CTM API] Step request received")
+    
     if not ctm_initialized or ctm_simulator is None:
-        return jsonify({'error': 'CTM not initialized'}), 400
+        log("[CTM API] ERROR: CTM not initialized")
+        return jsonify({'error': 'CTM not initialized. Click "Initialize CTM" first.'}), 400
     
     try:
         data = request.json or {}
         num_steps = data.get('steps', 1)
         
+        log(f"[CTM API] Running {num_steps} step(s)...")
+        
         # Run simulation steps, only keeping snapshot for final step
-        # Disable progress logging for API performance
         for i in range(num_steps):
             save_snapshot = (i == num_steps - 1)
             ctm_simulator.step(save_snapshot=save_snapshot, show_progress=False)
         
         stats = ctm_simulator.get_statistics()
         
+        # Get edge congestion for visualization
+        edge_congestion = {}
+        if ctm_simulator.snapshots:
+            latest = ctm_simulator.snapshots[-1]
+            # Convert tuple keys to string keys for JSON
+            for edge_id, cong in latest.edge_congestion.items():
+                u, v, key = edge_id
+                edge_congestion[f"{u}-{v}"] = cong
+        
+        log(f"[CTM API] Step complete. Time: {stats.get('simulation_time', 0):.1f} min, Vehicles: {stats.get('total_vehicles', 0)}")
+        
         return jsonify({
             'status': 'success',
             'steps_completed': num_steps,
+            'current_step': len(ctm_simulator.snapshots),
             'simulation_time': stats.get('simulation_time', 0),
+            'total_vehicles': stats.get('total_vehicles', 0),
+            'edge_congestion': edge_congestion,
             'stats': stats
         })
         
     except Exception as e:
+        log(f"[CTM API] Step ERROR: {e}")
+        import traceback
+        log(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
@@ -681,8 +741,15 @@ def ctm_close_road():
         target = data.get('target')
         key = data.get('key', 0)
         
-        if not source or not target:
+        if source is None or target is None:
             return jsonify({'error': 'Source and target required'}), 400
+        
+        # Convert to strings (graph uses string node IDs)
+        source = str(source)
+        target = str(target)
+        key = int(key)
+        
+        log(f"Closing road: {source} -> {target}")
         
         # Close the road
         ctm_simulator.close_road(source, target, key)
@@ -714,8 +781,15 @@ def ctm_reopen_road():
         target = data.get('target')
         key = data.get('key', 0)
         
-        if not source or not target:
+        if source is None or target is None:
             return jsonify({'error': 'Source and target required'}), 400
+        
+        # Convert to strings (graph uses string node IDs)
+        source = str(source)
+        target = str(target)
+        key = int(key)
+        
+        log(f"Reopening road: {source} -> {target}")
         
         # Reopen the road
         ctm_simulator.reopen_road(source, target, key)
@@ -864,31 +938,34 @@ def ctm_export():
 # ============================================================
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("🚦 Digital Twin City Simulation - Flask Backend")
-    print("=" * 60)
+    log("=" * 60)
+    log("[SERVER] Digital Twin City Simulation - Flask Backend")
+    log("=" * 60)
     
     # Initialize
     init_model()
     init_graph()
     
-    print("\n📡 Starting server...")
-    print("   Frontend: http://localhost:5000")
-    print("   API Docs: http://localhost:5000/api/status")
-    print("=" * 60)
+    log("")
+    log("[SERVER] Starting server...")
+    log("   Frontend: http://localhost:5000")
+    log("   API Docs: http://localhost:5000/api/status")
+    log("=" * 60)
     
     try:
         # Use waitress WSGI server for better Windows compatibility
         from waitress import serve
-        print(" * Using Waitress WSGI server")
-        print(" * Serving on http://127.0.0.1:5000")
-        print("Press CTRL+C to quit\n")
+        log(" * Using Waitress WSGI server")
+        log(" * Serving on http://127.0.0.1:5000")
+        log("Press CTRL+C to quit")
+        log("")
         serve(app, host='127.0.0.1', port=5000, threads=4)
     except KeyboardInterrupt:
-        print("\n\n[INFO] Server stopped by user")
+        log("")
+        log("[INFO] Server stopped by user")
     except Exception as e:
-        print(f"\n[ERROR] Server failed: {e}")
+        log(f"[ERROR] Server failed: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        print("\n[INFO] Shutting down...")
+        log("[INFO] Shutting down...")
