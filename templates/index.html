@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GNN Traffic Simulation - Interactive Map</title>
+    <title>GNN Traffic Simulation - Digital City Twin</title>
+    
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,8 +19,9 @@
 <body>
     <div class="container">
         <header>
-            <h1>🚦 GNN Traffic Simulation - Digital City Twin</h1>
-            <p>Select roads to block and analyze traffic impact</p>
+            <h1>GNN Traffic Simulation</h1>
+            <p class="header-subtitle">Digital City Twin - Interactive Traffic Analysis</p>
+            <p class="header-description">Select roads to simulate closures and analyze real-time traffic impact across the city network</p>
         </header>
 
         <div class="controls-panel">
@@ -26,28 +32,31 @@
             </div>
             <div class="info-panel">
                 <div class="info-item">
-                    <label>Mode:</label>
+                    <label>View Mode:</label>
                     <select id="viewMode">
                         <option value="baseline">Baseline Traffic</option>
                         <option value="selection">Selected Roads</option>
                     </select>
                 </div>
                 <div class="legend">
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #00ff00;"></span>
-                        <span>Low Traffic (1.0-2.0)</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #ffff00;"></span>
-                        <span>Moderate (2.0-3.0)</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #ff8800;"></span>
-                        <span>High (3.0-5.0)</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #ff0000;"></span>
-                        <span>Severe (5.0+)</span>
+                    <div class="legend-title">Traffic Congestion Levels</div>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #10b981;"></span>
+                            <span>Low Traffic (1.0-2.0)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #f59e0b;"></span>
+                            <span>Moderate (2.0-3.0)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #f97316;"></span>
+                            <span>High (3.0-5.0)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #ef4444;"></span>
+                            <span>Severe (5.0+)</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -57,7 +66,7 @@
 
         <div class="loading-overlay" id="loadingOverlay">
             <div class="spinner"></div>
-            <p>Loading graph data...</p>
+            <p>Loading city network data...</p>
         </div>
     </div>
 
@@ -68,6 +77,3 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
-
-
-

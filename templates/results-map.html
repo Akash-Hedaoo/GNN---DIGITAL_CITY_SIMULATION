@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Side-by-Side Map Comparison - GNN Traffic Analysis</title>
+    
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/results-map.css') }}">
@@ -11,34 +17,41 @@
 <body>
     <div class="container">
         <header>
-            <h1>📍 Side-by-Side Map Comparison</h1>
-            <p>Compare baseline congestion vs. predicted congestion from scenario analysis</p>
+            <h1>Side-by-Side Map Comparison</h1>
+            <p class="header-subtitle">Compare baseline congestion vs. predicted congestion from scenario analysis</p>
         </header>
 
         <div class="map-controls">
             <div class="sync-control">
                 <input type="checkbox" id="syncToggle" checked>
-                <label for="syncToggle">🔗 Synchronized Pan & Zoom</label>
+                <label for="syncToggle">Synchronized Pan & Zoom</label>
             </div>
             <div class="legend">
-                <div class="legend-item">
-                    <span class="legend-color" style="background: #00ff00;"></span>
-                    <span>Low (1.0-2.0)</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background: #ffff00;"></span>
-                    <span>Moderate (2.0-3.0)</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background: #ff8800;"></span>
-                    <span>High (3.0-5.0)</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background: #ff0000;"></span>
-                    <span>Severe (5.0+)</span>
+                <div class="legend-title">Traffic Congestion Levels</div>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #10b981;"></span>
+                        <span>Low (1.0-2.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #f59e0b;"></span>
+                        <span>Moderate (2.0-3.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #f97316;"></span>
+                        <span>High (3.0-5.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ef4444;"></span>
+                        <span>Severe (5.0+)</span>
+                    </div>
+                    <div class="legend-item legend-closed">
+                        <span class="legend-color" style="background: #991b1b; border: 2px solid #dc2626;"></span>
+                        <span>Closed Roads</span>
+                    </div>
                 </div>
             </div>
-            <a href="/results" class="btn btn-secondary">← Back to Results</a>
+            <a href="/results" class="btn btn-secondary">Back to Results</a>
         </div>
 
         <div class="maps-container">
@@ -66,7 +79,7 @@
             </div>
             <div class="info-box">
                 <h3>Color Legend</h3>
-                <p>Roads are colored based on their congestion factor (ratio of current to baseline travel time). Hover over any road to see detailed congestion metrics.</p>
+                <p>Roads are colored based on their congestion factor (ratio of current to baseline travel time). Closed roads are shown in dark red. All affected roads show color changes based on predicted congestion levels.</p>
             </div>
         </div>
 

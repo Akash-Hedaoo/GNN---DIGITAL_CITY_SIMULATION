@@ -1,3 +1,4 @@
+/* Premium Font Family */
 * {
     margin: 0;
     padding: 0;
@@ -5,100 +6,126 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #f0f4f8 100%);
     min-height: 100vh;
-    color: #333;
+    color: #1a202c;
+    font-weight: 400;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .container {
-    max-width: 100%;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 30px 20px;
 }
 
 header {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 20px 30px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 40px 50px;
+    border-radius: 16px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 header h1 {
-    color: #2c3e50;
-    margin-bottom: 5px;
-    font-size: 28px;
+    color: #0f172a;
+    margin-bottom: 12px;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    font-family: 'Poppins', sans-serif;
 }
 
-header p {
-    color: #7f8c8d;
-    font-size: 14px;
+.header-subtitle {
+    color: #475569;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.header-description {
+    color: #64748b;
+    font-size: 15px;
+    margin-top: 8px;
+    line-height: 1.6;
 }
 
 .controls-panel {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 28px 35px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(226, 232, 240, 0.8);
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: 25px;
 }
 
 .control-group {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .btn {
-    padding: 10px 20px;
+    padding: 12px 28px;
     border: none;
-    border-radius: 5px;
+    border-radius: 10px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-decoration: none;
     display: inline-block;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .btn-primary {
-    background: #3498db;
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     color: white;
 }
 
 .btn-primary:hover {
-    background: #2980b9;
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
 
 .btn-secondary {
-    background: #95a5a6;
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
     color: white;
 }
 
 .btn-secondary:hover {
-    background: #7f8c8d;
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
 }
 
 .badge {
-    background: #e74c3c;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
-    padding: 5px 15px;
+    padding: 8px 18px;
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    letter-spacing: 0.3px;
 }
 
 .info-panel {
     display: flex;
-    gap: 30px;
+    gap: 35px;
     align-items: center;
     flex-wrap: wrap;
 }
@@ -106,50 +133,84 @@ header p {
 .info-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .info-item label {
     font-weight: 600;
-    color: #555;
+    color: #334155;
+    font-size: 14px;
 }
 
 .info-item select {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
+    padding: 10px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
     font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    background: white;
+    color: #1e293b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.info-item select:hover {
+    border-color: #cbd5e1;
+}
+
+.info-item select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .legend {
     display: flex;
-    gap: 15px;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.legend-title {
+    font-weight: 600;
+    color: #334155;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.legend-items {
+    display: flex;
+    gap: 20px;
     flex-wrap: wrap;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 13px;
+    color: #475569;
 }
 
 .legend-color {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    border: 1px solid #ccc;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .map-container {
     width: 100%;
-    height: calc(100vh - 250px);
-    min-height: 600px;
-    border-radius: 10px;
+    height: calc(100vh - 280px);
+    min-height: 650px;
+    border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
     background: white;
     position: relative;
+    border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 #map {
@@ -163,7 +224,8 @@ header p {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -177,7 +239,7 @@ header p {
 }
 
 .spinner {
-    border: 4px solid rgba(255, 255, 255, 0.3);
+    border: 4px solid rgba(255, 255, 255, 0.2);
     border-top: 4px solid white;
     border-radius: 50%;
     width: 50px;
@@ -191,6 +253,12 @@ header p {
     100% { transform: rotate(360deg); }
 }
 
+.loading-overlay p {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
 /* Road styling on map */
 .road-selected {
     stroke-width: 4px !important;
@@ -199,16 +267,68 @@ header p {
 }
 
 .road-closed {
-    stroke: #e74c3c !important;
+    stroke: #991b1b !important;
     stroke-width: 5px !important;
     opacity: 1 !important;
 }
 
 .road-tooltip {
-    background: rgba(0, 0, 0, 0.8) !important;
+    background: rgba(15, 23, 42, 0.95) !important;
     color: white !important;
-    border-radius: 5px !important;
-    padding: 8px !important;
-    font-size: 12px !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    font-size: 13px !important;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .container {
+        padding: 20px 15px;
+    }
+    
+    header {
+        padding: 30px 35px;
+    }
+    
+    header h1 {
+        font-size: 28px;
+    }
+    
+    .controls-panel {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .info-panel {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        padding: 25px 20px;
+    }
+    
+    header h1 {
+        font-size: 24px;
+    }
+    
+    .header-subtitle {
+        font-size: 16px;
+    }
+    
+    .map-container {
+        min-height: 500px;
+        height: calc(100vh - 350px);
+    }
+    
+    .legend-items {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

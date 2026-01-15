@@ -39,6 +39,9 @@ async function loadGraphData() {
         baselinePredictions = graphData.baseline_predictions;
         currentPredictions = baselinePredictions;
         
+        // Store graph data in sessionStorage for results page
+        sessionStorage.setItem('graphData', JSON.stringify(graphData));
+        
         // Render graph on map
         renderGraph();
         
@@ -117,12 +120,12 @@ function renderGraph() {
     updateSelectionStyling();
 }
 
-// Get color based on congestion level
+// Get color based on congestion level - Premium color palette
 function getCongestionColor(congestion) {
-    if (congestion < 2.0) return '#00ff00'; // Green - Low
-    if (congestion < 3.0) return '#ffff00'; // Yellow - Moderate
-    if (congestion < 5.0) return '#ff8800'; // Orange - High
-    return '#ff0000'; // Red - Severe
+    if (congestion < 2.0) return '#10b981'; // Green - Low (premium green)
+    if (congestion < 3.0) return '#f59e0b'; // Amber - Moderate
+    if (congestion < 5.0) return '#f97316'; // Orange - High
+    return '#ef4444'; // Red - Severe
 }
 
 // Toggle edge selection

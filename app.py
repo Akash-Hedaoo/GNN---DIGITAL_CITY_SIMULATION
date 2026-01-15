@@ -9,6 +9,8 @@ from shapely import wkt
 from pyproj import Transformer
 from step4_train_model_improved import TrafficGATv2Improved
 import json
+import requests
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -377,6 +379,60 @@ def simulate_closure():
         'top_5_critical_edges': top_5_critical,
         'impacted_edges': impacted_edges[:100]  # Limit to top 100
     })
+
+@app.route('/api/get-road-name', methods=['POST'])
+def get_road_name():
+    """Get road name from coordinates using OpenStreetMap Nominatim API"""
+    data = request.json
+    lat = data.get('lat')
+    lon = data.get('lon')
+    
+    if not lat or not lon:
+        return jsonify({'error': 'Latitude and longitude required'}), 400
+    
+    try:
+        # Use OpenStreetMap Nominatim API (free, no API key needed)
+        url = f"https://nominatim.openstreetmap.org/reverse"
+        params = {
+            'lat': lat,
+            'lon': lon,
+            'format': 'json',
+            'addressdetails': 1,
+            'zoom': 18
+        }
+        headers = {
+            'User-Agent': 'GNN-Traffic-Simulation/1.0'  # Required by Nominatim
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract road name from address components
+        address = data.get('address', {})
+        road_name = (
+            address.get('road') or 
+            address.get('highway') or 
+            address.get('street') or
+            address.get('name') or
+            f"Road near {address.get('suburb', address.get('neighbourhood', 'area'))}"
+        )
+        
+        # Add more context if available
+        if address.get('suburb'):
+            road_name = f"{road_name}, {address['suburb']}"
+        
+        return jsonify({
+            'road_name': road_name,
+            'full_address': data.get('display_name', '')
+        })
+        
+    except Exception as e:
+        print(f"Error fetching road name: {e}")
+        return jsonify({
+            'road_name': f"Road at ({lat:.4f}, {lon:.4f})",
+            'error': str(e)
+        })
 
 if __name__ == '__main__':
     # Twin is already initialized at module level

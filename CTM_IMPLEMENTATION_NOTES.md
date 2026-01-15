@@ -122,3 +122,5 @@ Run `validate_ctm.py` to verify:
 **Memory**: ✅ Optimized for RTX 3050 6GB
 
 
+
+

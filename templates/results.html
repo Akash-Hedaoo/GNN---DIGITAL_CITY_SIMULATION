@@ -3,65 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulation Results - GNN Traffic Analysis</title>
+    <title>Traffic Impact Analysis - GNN Digital City</title>
+    
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📊 Simulation Results</h1>
+            <h1>Traffic Impact Analysis</h1>
+            <p class="header-subtitle">Understanding how road closures affect city traffic</p>
             <div class="header-buttons">
-                <a href="/maps" class="btn btn-primary">📍 View Side-by-Side Maps</a>
-                <a href="/" class="btn btn-secondary">← Back to Map</a>
+                <a href="/maps" class="btn btn-primary">View Side-by-Side Maps</a>
+                <a href="/" class="btn btn-secondary">Back to Map</a>
             </div>
         </header>
 
         <div class="results-container">
+            <!-- Summary Section -->
+            <div class="summary-section">
+                <h2>Overall Impact Summary</h2>
+                <p class="section-description">These metrics show how closing roads affects traffic across the entire city network.</p>
+            </div>
+
             <div class="metrics-panel">
-                <h2>Impact Metrics</h2>
                 <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-label">Net Traffic Change</div>
+                    <div class="metric-card metric-traffic-change">
+                        <div class="metric-icon">Traffic</div>
+                        <div class="metric-label">Overall Traffic Change</div>
                         <div class="metric-value" id="netChange">--</div>
-                        <div class="metric-unit">%</div>
+                        <div class="metric-description">Calculating...</div>
+                        <div class="metric-explanation">Shows the average change in traffic congestion across all roads</div>
                     </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Impacted Segments</div>
+                    <div class="metric-card metric-impacted">
+                        <div class="metric-icon">Affected</div>
+                        <div class="metric-label">Roads Affected</div>
                         <div class="metric-value" id="impactedSegments">--</div>
                         <div class="metric-unit">roads</div>
+                        <div class="metric-explanation">Number of road segments experiencing significant traffic changes</div>
                     </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Peak Bottleneck</div>
+                    <div class="metric-card metric-bottleneck">
+                        <div class="metric-icon">Bottleneck</div>
+                        <div class="metric-label">Worst Bottleneck</div>
                         <div class="metric-value" id="peakBottleneck">--</div>
-                        <div class="metric-unit">congestion factor</div>
+                        <div class="metric-description">Calculating...</div>
+                        <div class="metric-explanation">The most congested road segment after the closure</div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-average">
+                        <div class="metric-icon">Average</div>
                         <div class="metric-label">Average Congestion</div>
                         <div class="metric-value" id="avgCongestion">--</div>
-                        <div class="metric-unit">factor</div>
+                        <div class="metric-description">Calculating...</div>
+                        <div class="metric-explanation">Average congestion level across all roads in the city</div>
                     </div>
                 </div>
             </div>
 
-            <div class="impact-list">
-                <h2>🚨 Top 5 Critical Edges</h2>
-                <p class="top-5-subtitle">Road segments with the largest increase in travel time or highest absolute predicted congestion</p>
+            <!-- Top 5 Critical Roads -->
+            <div class="impact-list critical-roads-section">
+                <h2>Top 5 Most Affected Roads</h2>
+                <p class="section-description">These are the roads that will experience the biggest increase in traffic congestion. Travel times on these roads will increase significantly.</p>
                 <div id="top5EdgesList" class="top-5-edges">
                     <!-- Dynamically populated -->
                 </div>
             </div>
 
+            <!-- Impacted Roads List -->
             <div class="impact-list">
-                <h2>Most Impacted Road Segments</h2>
+                <h2>All Affected Road Segments</h2>
+                <p class="section-description">Complete list of roads experiencing traffic changes, sorted by impact level.</p>
                 <div id="impactList" class="impact-items">
                     <!-- Dynamically populated -->
                 </div>
             </div>
 
+            <!-- Visualization -->
             <div class="visualization-panel">
-                <h2>Traffic Impact Visualization</h2>
+                <h2>Visual Impact Chart</h2>
+                <p class="section-description">Bar chart showing the percentage change in congestion for the most affected roads.</p>
                 <canvas id="impactChart" width="800" height="400"></canvas>
+            </div>
+
+            <!-- Help Section -->
+            <div class="help-section">
+                <h3>Understanding the Results</h3>
+                <div class="help-grid">
+                    <div class="help-item">
+                        <strong>Congestion Factor:</strong> A value of 2.0x means travel time is 2 times longer than normal. Higher values indicate worse traffic.
+                    </div>
+                    <div class="help-item">
+                        <strong>Percentage Change:</strong> Shows how much congestion increased or decreased compared to normal conditions.
+                    </div>
+                    <div class="help-item">
+                        <strong>Travel Time Impact:</strong> Indicates how much longer your journey will take on affected roads.
+                    </div>
+                    <div class="help-item">
+                        <strong>Severity Levels:</strong> Critical (>50% change), High (25-50%), Moderate (10-25%), Low (<10%).
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -69,4 +113,3 @@
     <script src="{{ url_for('static', filename='js/results.js') }}"></script>
 </body>
 </html>
-
