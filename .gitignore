@@ -1,0 +1,7 @@
+__pycache__/
+*.log
+*.pt
+*.csv
+*.xml
+outputs/
+logs/
